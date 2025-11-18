@@ -1,0 +1,567 @@
+openapi: 3.0.3
+info:
+  title: CRM API - System Administration & Configuration
+  version: 1.0.0
+  description: Admin-only endpoints for system settings, integration keys, branding, audit logs, data retention, and global notifications (Spec-018)
+servers:
+  - url: https://api.crm.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  # System Settings
+  /admin/settings:
+    get:
+      summary: Get all system settings
+      tags: [Admin - Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemSettingsResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Update system settings
+      tags: [Admin - Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSystemSettingsRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemSettingsResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # Integration Keys
+  /admin/integrations:
+    get:
+      summary: List all integration keys
+      tags: [Admin - Integrations]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationKeyResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create new integration key
+      tags: [Admin - Integrations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIntegrationKeyRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationKeyResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Key name already exists }
+  /admin/integrations/{id}:
+    get:
+      summary: Get integration key by ID
+      tags: [Admin - Integrations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationKeyResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Update integration key
+      tags: [Admin - Integrations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIntegrationKeyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationKeyResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Delete integration key
+      tags: [Admin - Integrations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: No Content }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/integrations/{id}/show:
+    get:
+      summary: Show decrypted integration key (temporary)
+      tags: [Admin - Integrations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyValue: { type: string, description: Decrypted key value }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # Branding
+  /admin/branding:
+    get:
+      summary: Get current branding configuration
+      tags: [Admin - Branding]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandingResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Update branding configuration
+      tags: [Admin - Branding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBrandingRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandingResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/branding/logo:
+    post:
+      summary: Upload logo file
+      tags: [Admin - Branding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Logo file (PNG, JPG, or SVG, max 5MB)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logoUrl: { type: string, format: uri }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # Audit Logs
+  /admin/audit-logs:
+    get:
+      summary: Query audit logs with filters
+      tags: [Admin - Audit Logs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: performedBy
+          schema: { type: string, format: uuid }
+          description: Filter by user ID
+        - in: query
+          name: actionType
+          schema: { type: string }
+          description: Filter by action type
+        - in: query
+          name: entity
+          schema: { type: string }
+          description: Filter by entity type
+        - in: query
+          name: startDate
+          schema: { type: string, format: date-time }
+          description: Start date for date range filter
+        - in: query
+          name: endDate
+          schema: { type: string, format: date-time }
+          description: End date for date range filter
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAuditLogResult'
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/audit-logs/{id}:
+    get:
+      summary: Get audit log entry by ID
+      tags: [Admin - Audit Logs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/audit-logs/export:
+    get:
+      summary: Export audit logs to CSV
+      tags: [Admin - Audit Logs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: performedBy
+          schema: { type: string, format: uuid }
+        - in: query
+          name: actionType
+          schema: { type: string }
+        - in: query
+          name: entity
+          schema: { type: string }
+        - in: query
+          name: startDate
+          schema: { type: string, format: date-time }
+        - in: query
+          name: endDate
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # Data Retention
+  /admin/data-retention:
+    get:
+      summary: Get all data retention policies
+      tags: [Admin - Data Retention]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RetentionPolicyResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Update data retention policies
+      tags: [Admin - Data Retention]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/UpdateRetentionPolicyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RetentionPolicyResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # Notification Settings (Global Messages)
+  /admin/notification-settings:
+    get:
+      summary: Get global notification settings
+      tags: [Admin - Notifications]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSettingsResponse'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Update global notification settings
+      tags: [Admin - Notifications]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationSettingsRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSettingsResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token with Admin role required
+
+  schemas:
+    SystemSettingsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: { type: object, additionalProperties: true, description: Key-value pairs of settings }
+
+    UpdateSystemSettingsRequest:
+      type: object
+      required: [settings]
+      properties:
+        settings:
+          type: object
+          additionalProperties: true
+          description: Key-value pairs of settings to update
+          example:
+            CompanyName: "Acme Corporation"
+            DateFormat: "dd/MM/yyyy"
+            DefaultCurrency: "INR"
+
+    IntegrationKeyResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        keyName: { type: string, example: "Stripe Production Key" }
+        keyValueMasked: { type: string, example: "****1234", description: Masked key value }
+        provider: { type: string, example: "Stripe" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+
+    CreateIntegrationKeyRequest:
+      type: object
+      required: [keyName, keyValue, provider]
+      properties:
+        keyName: { type: string, minLength: 1, maxLength: 255 }
+        keyValue: { type: string, description: Plain text key value (will be encrypted) }
+        provider: { type: string, minLength: 1, maxLength: 100 }
+
+    UpdateIntegrationKeyRequest:
+      type: object
+      properties:
+        keyName: { type: string, minLength: 1, maxLength: 255 }
+        keyValue: { type: string, description: Plain text key value (will be encrypted) }
+        provider: { type: string, minLength: 1, maxLength: 100 }
+
+    BrandingResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        logoUrl: { type: string, format: uri, nullable: true }
+        primaryColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: "#FFFFFF" }
+        secondaryColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: "#10B981" }
+        accentColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', nullable: true }
+        footerHtml: { type: string, nullable: true, description: Sanitized HTML }
+        updatedAt: { type: string, format: date-time }
+
+    UpdateBrandingRequest:
+      type: object
+      properties:
+        primaryColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        secondaryColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        accentColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', nullable: true }
+        footerHtml: { type: string, nullable: true }
+
+    AuditLogResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actionType: { type: string, example: "SettingsUpdated" }
+        entity: { type: string, example: "SystemSettings" }
+        entityId: { type: string, format: uuid, nullable: true }
+        performedBy: { type: string, format: uuid }
+        performedByUserName: { type: string, example: "admin@example.com" }
+        ipAddress: { type: string, nullable: true }
+        timestamp: { type: string, format: date-time }
+        changes: { type: object, nullable: true, description: JSONB changes object }
+
+    PagedAuditLogResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogResponse'
+        totalCount: { type: integer }
+        pageNumber: { type: integer }
+        pageSize: { type: integer }
+        hasMore: { type: boolean }
+
+    RetentionPolicyResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, example: "Quotation" }
+        retentionPeriodMonths: { type: integer, minimum: 1 }
+        isActive: { type: boolean }
+        autoPurgeEnabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+
+    UpdateRetentionPolicyRequest:
+      type: object
+      required: [entityType, retentionPeriodMonths]
+      properties:
+        entityType: { type: string }
+        retentionPeriodMonths: { type: integer, minimum: 1 }
+        isActive: { type: boolean }
+        autoPurgeEnabled: { type: boolean }
+
+    NotificationSettingsResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        message: { type: string, description: Sanitized HTML message }
+        messageType: { type: string, enum: [info, warning, error] }
+        isVisible: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+
+    UpdateNotificationSettingsRequest:
+      type: object
+      required: [message, messageType]
+      properties:
+        message: { type: string, minLength: 1 }
+        messageType: { type: string, enum: [info, warning, error] }
+        isVisible: { type: boolean }
+
+  responses:
+    BadRequest:
+      description: Bad Request (validation failed)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              errors: { type: array, items: { type: string } }
+    Forbidden:
+      description: Forbidden (Admin role required)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string, example: "Access denied. Admin role required." }
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string }
+

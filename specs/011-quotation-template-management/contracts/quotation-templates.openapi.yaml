@@ -1,0 +1,765 @@
+openapi: 3.0.3
+info:
+  title: Quotation Template Management API
+  description: |
+    API for managing quotation templates. Templates allow sales reps to quickly create 
+    quotations using predefined line items, pricing, and terms.
+    
+    Features:
+    - Create, update, delete, and restore templates
+    - Apply templates to quotation creation
+    - Version history and rollback
+    - Admin approval workflow
+    - Usage statistics and analytics
+  version: 1.0.0
+  contact:
+    name: CRM API Support
+
+servers:
+  - url: https://api.crm.example.com/api/v1
+    description: Production server
+  - url: http://localhost:5000/api/v1
+    description: Development server
+
+tags:
+  - name: Templates
+    description: Quotation template management operations
+  - name: Template Versions
+    description: Template version history operations
+  - name: Template Approval
+    description: Admin template approval operations
+  - name: Template Statistics
+    description: Template usage statistics
+
+paths:
+  /quotation-templates:
+    get:
+      tags: [Templates]
+      summary: List quotation templates
+      description: Get paginated list of templates with filtering and search
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pageNumber
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: search
+          in: query
+          description: Search by name or description
+          schema:
+            type: string
+        - name: visibility
+          in: query
+          description: Filter by visibility
+          schema:
+            type: string
+            enum: [Public, Team, Private]
+        - name: isApproved
+          in: query
+          description: Filter by approval status
+          schema:
+            type: boolean
+        - name: ownerUserId
+          in: query
+          description: Filter by owner
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuotationTemplateDto'
+                  pageNumber:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Templates]
+      summary: Create new quotation template
+      description: Create a new quotation template with line items
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuotationTemplateRequest'
+      responses:
+        '201':
+          description: Template created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/QuotationTemplateDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /quotation-templates/{templateId}:
+    get:
+      tags: [Templates]
+      summary: Get template by ID
+      description: Get detailed information about a specific template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/QuotationTemplateDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    put:
+      tags: [Templates]
+      summary: Update template
+      description: Update an existing template (creates new version)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuotationTemplateRequest'
+      responses:
+        '200':
+          description: Template updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/QuotationTemplateDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Templates]
+      summary: Delete template (soft delete)
+      description: Soft delete a template (sets DeletedAt timestamp)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /quotation-templates/{templateId}/restore:
+    post:
+      tags: [Templates]
+      summary: Restore deleted template
+      description: Restore a soft-deleted template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template restored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/QuotationTemplateDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /quotation-templates/{templateId}/apply:
+    post:
+      tags: [Templates]
+      summary: Apply template to quotation
+      description: |
+        Returns template data formatted as CreateQuotationRequest.
+        Increments usage count and updates LastUsedAt.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: clientId
+          in: query
+          description: Client ID for the quotation
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template applied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/CreateQuotationRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /quotation-templates/{templateId}/versions:
+    get:
+      tags: [Template Versions]
+      summary: Get template version history
+      description: Get all versions of a template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuotationTemplateVersionDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /quotation-templates/{templateId}/approve:
+    post:
+      tags: [Template Approval]
+      summary: Approve template (Admin only)
+      description: Approve a template for global/public use
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/QuotationTemplateDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /quotation-templates/usage-stats:
+    get:
+      tags: [Template Statistics]
+      summary: Get template usage statistics (Admin only)
+      description: Get aggregated usage statistics for all templates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: groupBy
+          in: query
+          description: Group by owner, role, or visibility
+          schema:
+            type: string
+            enum: [owner, role, visibility]
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/TemplateUsageStatsDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    QuotationTemplateDto:
+      type: object
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Standard Web Development Package"
+        description:
+          type: string
+          nullable: true
+        ownerUserId:
+          type: string
+          format: uuid
+        ownerUserName:
+          type: string
+        ownerRole:
+          type: string
+          example: "SalesRep"
+        visibility:
+          type: string
+          enum: [Public, Team, Private]
+        isApproved:
+          type: boolean
+        approvedByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        version:
+          type: integer
+        usageCount:
+          type: integer
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateLineItemDto'
+        isActive:
+          type: boolean
+        isEditable:
+          type: boolean
+
+    TemplateLineItemDto:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+          format: uuid
+        sequenceNumber:
+          type: integer
+        itemName:
+          type: string
+        description:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          format: decimal
+        unitRate:
+          type: number
+          format: decimal
+        amount:
+          type: number
+          format: decimal
+
+    CreateQuotationTemplateRequest:
+      type: object
+      required: [name, visibility, lineItems]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: "Standard Web Development Package"
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+        visibility:
+          type: string
+          enum: [Public, Team, Private]
+        lineItems:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateTemplateLineItemRequest'
+        notes:
+          type: string
+          maxLength: 2000
+          nullable: true
+        discountDefault:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          nullable: true
+
+    CreateTemplateLineItemRequest:
+      type: object
+      required: [itemName, quantity, unitRate]
+      properties:
+        itemName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          format: decimal
+          minimum: 0.01
+        unitRate:
+          type: number
+          format: decimal
+          minimum: 0.01
+
+    UpdateQuotationTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+        visibility:
+          type: string
+          enum: [Public, Team, Private]
+        lineItems:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/UpdateTemplateLineItemRequest'
+        notes:
+          type: string
+          maxLength: 2000
+          nullable: true
+        discountDefault:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          nullable: true
+
+    UpdateTemplateLineItemRequest:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+          format: uuid
+          nullable: true
+        itemName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          format: decimal
+          minimum: 0.01
+        unitRate:
+          type: number
+          format: decimal
+          minimum: 0.01
+
+    CreateQuotationRequest:
+      type: object
+      description: Returned by /apply endpoint, formatted for quotation creation
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        quotationDate:
+          type: string
+          format: date
+        validUntil:
+          type: string
+          format: date
+        discountPercentage:
+          type: number
+          format: decimal
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateLineItemRequest'
+
+    CreateLineItemRequest:
+      type: object
+      properties:
+        itemName:
+          type: string
+        description:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          format: decimal
+        unitRate:
+          type: number
+          format: decimal
+
+    QuotationTemplateVersionDto:
+      type: object
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        name:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        updatedByUserId:
+          type: string
+          format: uuid
+        updatedByUserName:
+          type: string
+        previousVersionId:
+          type: string
+          format: uuid
+          nullable: true
+
+    TemplateUsageStatsDto:
+      type: object
+      properties:
+        totalTemplates:
+          type: integer
+        totalUsage:
+          type: integer
+        mostUsedTemplates:
+          type: array
+          items:
+            type: object
+            properties:
+              templateId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              usageCount:
+                type: integer
+              lastUsedAt:
+                type: string
+                format: date-time
+                nullable: true
+        templatesByVisibility:
+          type: object
+          properties:
+            Public:
+              type: integer
+            Team:
+              type: integer
+            Private:
+              type: integer
+        templatesByRole:
+          type: object
+          additionalProperties:
+            type: integer
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: object
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+

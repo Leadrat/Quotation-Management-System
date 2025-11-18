@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: CRM API - Clients
+  version: 1.0.0
+  description: Client CRUD endpoints for Spec-006
+servers:
+  - url: https://api.crm.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /clients:
+    get:
+      summary: List clients (paginated)
+      tags: [Clients]
+      parameters:
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+        - in: query
+          name: userId
+          schema: { type: string, format: uuid }
+          description: Admin only. Filter by sales rep.
+      responses:
+        '200':
+          description: Paged result of clients
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedClientResult'
+    post:
+      summary: Create client
+      tags: [Clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '400': { description: Validation failed }
+        '409': { description: Email already exists }
+  /clients/{clientId}:
+    get:
+      summary: Get client by ID
+      tags: [Clients]
+      parameters:
+        - in: path
+          name: clientId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '403': { description: Forbidden }
+        '404': { description: Not Found }
+    put:
+      summary: Update client
+      tags: [Clients]
+      parameters:
+        - in: path
+          name: clientId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '400': { description: Validation failed }
+        '403': { description: Forbidden }
+        '404': { description: Not Found }
+        '409': { description: Email already exists }
+    delete:
+      summary: Soft delete client
+      tags: [Clients]
+      parameters:
+        - in: path
+          name: clientId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResult'
+        '403': { description: Forbidden }
+        '404': { description: Not Found }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ClientResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          $ref: '#/components/schemas/ClientDto'
+    ClientDto:
+      type: object
+      properties:
+        clientId: { type: string, format: uuid }
+        companyName: { type: string }
+        contactName: { type: string, nullable: true }
+        email: { type: string }
+        mobile: { type: string }
+        phoneCode: { type: string, nullable: true }
+        gstin: { type: string, nullable: true }
+        stateCode: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        pinCode: { type: string, nullable: true }
+        createdByUserName: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        displayName: { type: string }
+    CreateClientRequest:
+      type: object
+      required: [companyName, email, mobile]
+      properties:
+        companyName: { type: string }
+        contactName: { type: string }
+        email: { type: string }
+        mobile: { type: string }
+        phoneCode: { type: string }
+        gstin: { type: string }
+        stateCode: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pinCode: { type: string }
+    UpdateClientRequest:
+      type: object
+      properties:
+        companyName: { type: string }
+        contactName: { type: string }
+        email: { type: string }
+        mobile: { type: string }
+        phoneCode: { type: string }
+        gstin: { type: string }
+        stateCode: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pinCode: { type: string }
+    PagedClientResult:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ClientDto' }
+        pageNumber: { type: integer, example: 1 }
+        pageSize: { type: integer, example: 10 }
+        totalCount: { type: integer, example: 42 }
+    DeleteResult:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        deletedAt: { type: string, format: date-time }

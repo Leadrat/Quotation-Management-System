@@ -1,0 +1,395 @@
+openapi: 3.0.3
+info:
+  title: Spec-008 Client History & Activity Log
+  version: 0.1.0
+  description: >
+    Endpoints that expose client timelines, history exports, user activity feeds,
+    suspicious-activity dashboards, and client restoration workflows.
+servers:
+  - url: https://api.crm.local/api/v1
+paths:
+  /clients/{clientId}/history:
+    get:
+      summary: List history entries for a client
+      tags: [ClientHistory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: includeAccessLogs
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Paginated history entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedClientHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /clients/{clientId}/timeline:
+    get:
+      summary: Get timeline summary for a client
+      tags: [ClientHistory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: Timeline summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientTimelineSummary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /clients/{clientId}/restore:
+    post:
+      summary: Restore a deleted client
+      tags: [ClientHistory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreClientRequest'
+      responses:
+        '200':
+          description: Client restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRestoreResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{userId}/activity:
+    get:
+      summary: List client-related actions performed by a user
+      tags: [ClientHistory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: actionType
+          in: query
+          schema:
+            $ref: '#/components/schemas/ActionType'
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Paginated activity entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedClientHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/suspicious-activity:
+    get:
+      summary: Review suspicious client activity
+      tags: [SuspiciousActivity]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: minScore
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10
+            default: 7
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, ACKNOWLEDGED, DISMISSED]
+      responses:
+        '200':
+          description: Paginated suspicious activity results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSuspiciousActivityResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /clients/history/export:
+    get:
+      summary: Export client history
+      tags: [ClientHistory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: clientIds
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+        - name: actionType
+          in: query
+          schema:
+            $ref: '#/components/schemas/ActionType'
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv, pdf]
+            default: csv
+      responses:
+        '200':
+          description: CSV or PDF stream
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageNumber:
+      name: pageNumber
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    BadRequest:
+      description: Invalid request payload or filters
+    Forbidden:
+      description: User lacks permission for this resource
+    NotFound:
+      description: Resource not found or not owned
+  schemas:
+    ActionType:
+      type: string
+      enum: [CREATED, UPDATED, DELETED, RESTORED, ACCESSED]
+    ClientHistoryEntry:
+      type: object
+      properties:
+        historyId:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+          format: uuid
+          nullable: true
+        actionType:
+          $ref: '#/components/schemas/ActionType'
+        changedFields:
+          type: array
+          items:
+            type: string
+        beforeSnapshot:
+          type: object
+          additionalProperties: true
+        afterSnapshot:
+          type: object
+          additionalProperties: true
+        reason:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        suspicionScore:
+          type: integer
+          minimum: 0
+          maximum: 10
+        createdAt:
+          type: string
+          format: date-time
+    PagedClientHistoryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientHistoryEntry'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        hasMore:
+          type: boolean
+    ClientTimelineSummary:
+      type: object
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        companyName:
+          type: string
+        isDeleted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastModifiedAt:
+          type: string
+          format: date-time
+        lastModifiedBy:
+          type: string
+          format: uuid
+          nullable: true
+        totalChangeCount:
+          type: integer
+        deletionInfo:
+          type: object
+          nullable: true
+          additionalProperties: true
+        restorationWindowExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+    RestoreClientRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+    ClientRestoreResult:
+      type: object
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        restoredAt:
+          type: string
+          format: date-time
+        restoredBy:
+          type: string
+          format: uuid
+        message:
+          type: string
+    SuspiciousActivityEntry:
+      type: object
+      properties:
+        flagId:
+          type: string
+          format: uuid
+        historyId:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        score:
+          type: integer
+          minimum: 0
+          maximum: 10
+        reasons:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [OPEN, ACKNOWLEDGED, DISMISSED]
+        detectedAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewedBy:
+          type: string
+          format: uuid
+          nullable: true
+    PagedSuspiciousActivityResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuspiciousActivityEntry'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        hasMore:
+          type: boolean
+

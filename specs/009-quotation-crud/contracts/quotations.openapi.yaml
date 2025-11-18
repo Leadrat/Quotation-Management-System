@@ -1,0 +1,378 @@
+openapi: 3.0.3
+info:
+  title: CRM API - Quotations
+  version: 1.0.0
+  description: Quotation CRUD endpoints for Spec-009
+servers:
+  - url: https://api.crm.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /quotations:
+    get:
+      summary: List quotations (paginated)
+      tags: [Quotations]
+      parameters:
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+        - in: query
+          name: clientId
+          schema: { type: string, format: uuid }
+          description: Filter by client
+        - in: query
+          name: status
+          schema: { type: string, enum: [DRAFT, SENT, VIEWED, ACCEPTED, REJECTED, EXPIRED, CANCELLED] }
+          description: Filter by status
+        - in: query
+          name: userId
+          schema: { type: string, format: uuid }
+          description: Admin only. Filter by sales rep.
+        - in: query
+          name: dateFrom
+          schema: { type: string, format: date }
+          description: Filter from date
+        - in: query
+          name: dateTo
+          schema: { type: string, format: date }
+          description: Filter to date
+      responses:
+        '200':
+          description: Paged result of quotations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedQuotationResult'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+    post:
+      summary: Create quotation
+      tags: [Quotations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuotationRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Client not found }
+  /quotations/{quotationId}:
+    get:
+      summary: Get quotation by ID
+      tags: [Quotations]
+      parameters:
+        - in: path
+          name: quotationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Cannot view other user's quotation }
+        '404': { description: Not Found }
+    put:
+      summary: Update quotation (draft only)
+      tags: [Quotations]
+      parameters:
+        - in: path
+          name: quotationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuotationRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationResponse'
+        '400': { description: Validation failed or quotation not in DRAFT status }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Cannot edit other user's quotation }
+        '404': { description: Not Found }
+    delete:
+      summary: Delete quotation (draft only)
+      tags: [Quotations]
+      parameters:
+        - in: path
+          name: quotationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+        '400': { description: Quotation not in DRAFT or CANCELLED status }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Cannot delete other user's quotation }
+        '404': { description: Not Found }
+  /quotations/client/{clientId}:
+    get:
+      summary: Get quotations by client
+      tags: [Quotations]
+      parameters:
+        - in: path
+          name: clientId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuotationResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Client not found }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    QuotationResponse:
+      type: object
+      properties:
+        quotationId:
+          type: string
+          format: uuid
+        quotationNumber:
+          type: string
+          example: QT-2025-001234
+        clientId:
+          type: string
+          format: uuid
+        clientName:
+          type: string
+          example: ABC Corporation
+        clientEmail:
+          type: string
+          example: john@abc.com
+        status:
+          type: string
+          enum: [DRAFT, SENT, VIEWED, ACCEPTED, REJECTED, EXPIRED, CANCELLED]
+        quotationDate:
+          type: string
+          format: date
+          example: 2025-11-15
+        validUntil:
+          type: string
+          format: date
+          example: 2025-12-15
+        isExpired:
+          type: boolean
+        subTotal:
+          type: number
+          format: decimal
+          example: 50000.00
+        discountAmount:
+          type: number
+          format: decimal
+          example: 5000.00
+        discountPercentage:
+          type: number
+          format: decimal
+          example: 10.00
+        taxAmount:
+          type: number
+          format: decimal
+          example: 9000.00
+        cgstAmount:
+          type: number
+          format: decimal
+          nullable: true
+          example: 4500.00
+        sgstAmount:
+          type: number
+          format: decimal
+          nullable: true
+          example: 4500.00
+        igstAmount:
+          type: number
+          format: decimal
+          nullable: true
+          example: 0.00
+        totalAmount:
+          type: number
+          format: decimal
+          example: 54000.00
+        notes:
+          type: string
+          nullable: true
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemResponse'
+        createdByUserName:
+          type: string
+          example: Priya Singh
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LineItemResponse:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+          format: uuid
+        sequenceNumber:
+          type: integer
+          example: 1
+        itemName:
+          type: string
+          example: Cloud Storage 1TB/month
+        description:
+          type: string
+          nullable: true
+        quantity:
+          type: number
+          format: decimal
+          example: 10.00
+        unitRate:
+          type: number
+          format: decimal
+          example: 5000.00
+        amount:
+          type: number
+          format: decimal
+          example: 50000.00
+    CreateQuotationRequest:
+      type: object
+      required: [clientId, lineItems]
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        quotationDate:
+          type: string
+          format: date
+        validUntil:
+          type: string
+          format: date
+        discountPercentage:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          default: 0
+        notes:
+          type: string
+        lineItems:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateLineItemRequest'
+    CreateLineItemRequest:
+      type: object
+      required: [itemName, quantity, unitRate]
+      properties:
+        itemName:
+          type: string
+          minLength: 2
+          maxLength: 255
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+          minimum: 0.01
+        unitRate:
+          type: number
+          format: decimal
+          minimum: 0.01
+    UpdateQuotationRequest:
+      type: object
+      properties:
+        quotationDate:
+          type: string
+          format: date
+        validUntil:
+          type: string
+          format: date
+        discountPercentage:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+        notes:
+          type: string
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateLineItemRequest'
+    UpdateLineItemRequest:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+          format: uuid
+          description: Required for updates, omit for new items
+        itemName:
+          type: string
+          minLength: 2
+          maxLength: 255
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+          minimum: 0.01
+        unitRate:
+          type: number
+          format: decimal
+          minimum: 0.01
+    PagedQuotationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotationResponse'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+

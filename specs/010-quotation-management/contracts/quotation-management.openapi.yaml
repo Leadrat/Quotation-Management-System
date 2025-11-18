@@ -1,0 +1,453 @@
+openapi: 3.0.3
+info:
+  title: CRM API - Quotation Management (Spec-010)
+  version: v1
+  description: |
+    Quotation Management endpoints for sending quotations, tracking views and responses,
+    generating PDFs, and managing client portal access. Extends Spec-009 (Quotation CRUD).
+
+servers:
+  - url: https://api.example.com
+    description: Production server
+  - url: http://localhost:5000
+    description: Development server
+
+paths:
+  /api/v1/quotations/{quotationId}/send:
+    post:
+      tags:
+        - Quotations
+      summary: Send quotation via email
+      description: Sends quotation to client via email with PDF attachment and secure access link
+      operationId: sendQuotation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendQuotationRequest'
+      responses:
+        '200':
+          description: Quotation sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendQuotationResponse'
+        '400':
+          description: Bad request (quotation not in DRAFT status)
+        '403':
+          description: Forbidden (cannot send other user's quotation)
+        '404':
+          description: Quotation not found
+        '500':
+          description: Email send failed
+
+  /api/v1/quotations/{quotationId}/resend:
+    post:
+      tags:
+        - Quotations
+      summary: Resend quotation
+      description: Resends quotation to same or different email address
+      operationId: resendQuotation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendQuotationRequest'
+      responses:
+        '200':
+          description: Quotation resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationDto'
+        '400':
+          description: Bad request
+        '404':
+          description: Quotation not found
+
+  /api/v1/quotations/{quotationId}/status-history:
+    get:
+      tags:
+        - Quotations
+      summary: Get quotation status history
+      description: Returns timeline of all status changes for a quotation
+      operationId: getQuotationStatusHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuotationStatusHistoryDto'
+        '404':
+          description: Quotation not found
+
+  /api/v1/quotations/{quotationId}/response:
+    get:
+      tags:
+        - Quotations
+      summary: Get client response
+      description: Returns client's response to quotation (if exists)
+      operationId: getQuotationResponse
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Response retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/QuotationResponseDto'
+        '204':
+          description: No response yet from client
+        '404':
+          description: Quotation not found
+
+  /api/v1/quotations/{quotationId}/download-pdf:
+    get:
+      tags:
+        - Quotations
+      summary: Download quotation PDF
+      description: Downloads PDF file of quotation
+      operationId: downloadQuotationPdf
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Quotation not found
+
+  /api/v1/client-portal/quotations/{quotationId}/{accessToken}:
+    get:
+      tags:
+        - Client Portal
+      summary: View quotation (public)
+      description: Public endpoint to view quotation without authentication
+      operationId: getQuotationByAccessToken
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: accessToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Quotation retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PublicQuotationDto'
+        '403':
+          description: Access link expired or inactive
+        '404':
+          description: Quotation or access link not found
+
+  /api/v1/client-portal/quotations/{quotationId}/{accessToken}/respond:
+    post:
+      tags:
+        - Client Portal
+      summary: Submit quotation response (public)
+      description: Allows client to accept, reject, or request modification
+      operationId: submitQuotationResponse
+      parameters:
+        - name: quotationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: accessToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitQuotationResponseRequest'
+      responses:
+        '200':
+          description: Response submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Bad request (already responded, invalid response type)
+        '403':
+          description: Access link expired
+        '404':
+          description: Quotation or access link not found
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SendQuotationRequest:
+      type: object
+      required:
+        - recipientEmail
+      properties:
+        recipientEmail:
+          type: string
+          format: email
+        ccEmails:
+          type: array
+          items:
+            type: string
+            format: email
+        bccEmails:
+          type: array
+          items:
+            type: string
+            format: email
+        customMessage:
+          type: string
+          maxLength: 500
+
+    ResendQuotationRequest:
+      type: object
+      properties:
+        newRecipientEmail:
+          type: string
+          format: email
+
+    SendQuotationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        quotation:
+          $ref: '#/components/schemas/QuotationDto'
+        accessLink:
+          $ref: '#/components/schemas/QuotationAccessLinkDto'
+
+    QuotationStatusHistoryDto:
+      type: object
+      properties:
+        historyId:
+          type: string
+          format: uuid
+        quotationId:
+          type: string
+          format: uuid
+        previousStatus:
+          type: string
+        newStatus:
+          type: string
+        changedByUserName:
+          type: string
+        reason:
+          type: string
+        changedAt:
+          type: string
+          format: date-time
+        ipAddress:
+          type: string
+
+    QuotationResponseDto:
+      type: object
+      properties:
+        responseId:
+          type: string
+          format: uuid
+        quotationId:
+          type: string
+          format: uuid
+        responseType:
+          type: string
+          enum: [ACCEPTED, REJECTED, NEEDS_MODIFICATION]
+        clientEmail:
+          type: string
+          format: email
+        clientName:
+          type: string
+        responseMessage:
+          type: string
+        responseDate:
+          type: string
+          format: date-time
+        ipAddress:
+          type: string
+        notifiedAdminAt:
+          type: string
+          format: date-time
+
+    QuotationAccessLinkDto:
+      type: object
+      properties:
+        accessLinkId:
+          type: string
+          format: uuid
+        quotationId:
+          type: string
+          format: uuid
+        clientEmail:
+          type: string
+          format: email
+        viewUrl:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+        firstViewedAt:
+          type: string
+          format: date-time
+        lastViewedAt:
+          type: string
+          format: date-time
+        viewCount:
+          type: integer
+        ipAddress:
+          type: string
+
+    PublicQuotationDto:
+      type: object
+      description: Public quotation DTO (no internal notes or creator info)
+      properties:
+        quotationId:
+          type: string
+          format: uuid
+        quotationNumber:
+          type: string
+        quotationDate:
+          type: string
+          format: date
+        validUntil:
+          type: string
+          format: date
+        isExpired:
+          type: boolean
+        clientName:
+          type: string
+        subTotal:
+          type: number
+        discountAmount:
+          type: number
+        taxAmount:
+          type: number
+        totalAmount:
+          type: number
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemDto'
+        notes:
+          type: string
+
+    SubmitQuotationResponseRequest:
+      type: object
+      required:
+        - responseType
+      properties:
+        responseType:
+          type: string
+          enum: [ACCEPTED, REJECTED, NEEDS_MODIFICATION]
+        clientName:
+          type: string
+        responseMessage:
+          type: string
+          maxLength: 2000
+        clientEmail:
+          type: string
+          format: email
+
+    QuotationDto:
+      $ref: '../009-quotation-crud/contracts/quotations.openapi.yaml#/components/schemas/QuotationDto'
+
+    LineItemDto:
+      $ref: '../009-quotation-crud/contracts/quotations.openapi.yaml#/components/schemas/LineItemDto'
+

@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Global overrides: force any gray text/border utilities to black */
+/* Text grays → black */
+[class^="text-gray-"], [class*=" text-gray-"] {
+  color: #000 !important;
+}
+/* Text zinc/slate/neutral → black */
+[class^="text-zinc-"], [class*=" text-zinc-"],
+[class^="text-slate-"], [class*=" text-slate-"],
+[class^="text-neutral-"], [class*=" text-neutral-"] {
+  color: #000 !important;
+}
+/* Border grays → black */
+[class^="border-gray-"], [class*=" border-gray-"] {
+  border-color: #000 !important;
+}
+/* Border zinc/slate/neutral → black */
+[class^="border-zinc-"], [class*=" border-zinc-"],
+[class^="border-slate-"], [class*=" border-slate-"],
+[class^="border-neutral-"], [class*=" border-neutral-"] {
+  border-color: #000 !important;
+}
+/* Dark variant gray text/border → black as well */
+.dark [class^="text-gray-"], .dark [class*=" text-gray-"] {
+  color: #000 !important;
+}
+.dark [class^="border-gray-"], .dark [class*=" border-gray-"] {
+  border-color: #000 !important;
+}
+/* Links should be black by default */
+a { color: #000 !important; }
+h1, h2, h3, h4, h5, h6 { color: #000 !important; }
+/* Default common text elements to black */
+p, span, li, label, input, button, small, td, th, div { color: #000; }
+
+/* If background is black or very dark, force text to white for contrast */
+.bg-black, .bg-black * { color: #fff !important; }
+.bg-gray-900, .bg-neutral-900, .bg-zinc-900, .bg-slate-900,
+.bg-gray-950, .bg-neutral-950, .bg-zinc-950, .bg-slate-950,
+.bg-gray-800, .bg-neutral-800, .bg-zinc-800, .bg-slate-800 {
+  color: #fff !important;
+}
