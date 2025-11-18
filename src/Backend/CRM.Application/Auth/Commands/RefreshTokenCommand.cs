@@ -1,0 +1,6 @@
+namespace CRM.Application.Auth.Commands;
+
+public class RefreshTokenCommand
+{
+    public string? RefreshToken { get; set; }
+}

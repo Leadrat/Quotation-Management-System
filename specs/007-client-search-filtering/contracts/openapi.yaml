@@ -1,0 +1,248 @@
+openapi: 3.0.3
+info:
+  title: CRM Client Search API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /clients/search:
+    get:
+      summary: Search clients with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: searchTerm
+          schema: { type: string, maxLength: 255 }
+        - in: query
+          name: city
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+        - in: query
+          name: stateCode
+          schema: { type: string }
+        - in: query
+          name: gstin
+          schema: { type: string }
+        - in: query
+          name: userId
+          description: Admin-only; maps to CreatedByUserId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: createdDateFrom
+          schema: { type: string, format: date-time }
+        - in: query
+          name: createdDateTo
+          schema: { type: string, format: date-time }
+        - in: query
+          name: updatedDateFrom
+          schema: { type: string, format: date-time }
+        - in: query
+          name: updatedDateTo
+          schema: { type: string, format: date-time }
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [NameAsc, NameDesc, CreatedAtDesc, CreatedAtAsc, UpdatedAtDesc, EmailAsc]
+            default: CreatedAtDesc
+        - in: query
+          name: pageNumber
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+      responses:
+        '200':
+          description: Paged search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedClientResult'
+        '400':
+          description: Validation error
+  /clients/search/suggestions:
+    get:
+      summary: Autocomplete suggestions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: term
+          schema: { type: string, minLength: 2, maxLength: 255 }
+          required: true
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [CompanyName, Email, City, ContactName]
+            default: CompanyName
+        - in: query
+          name: maxSuggestions
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { type: string }
+  /clients/search/filter-options:
+    get:
+      summary: Faceted filter options
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Filter options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterOptionsDto'
+  /clients/search/save:
+    post:
+      summary: Save search filter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSearchFilterRequest'
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearchResponse'
+  /clients/search/saved:
+    get:
+      summary: List saved searches (current user; Admin can pass userId)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: userId
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Saved searches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SavedSearchDto' }
+  /clients/search/saved/{savedSearchId}:
+    delete:
+      summary: Delete saved search (owner or admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: savedSearchId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Deleted
+  /clients/export:
+    get:
+      summary: Export clients
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [csv, excel]
+            default: csv
+        - in: query
+          name: searchTerm
+          schema: { type: string }
+        - in: query
+          name: city
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+        - in: query
+          name: stateCode
+          schema: { type: string }
+        - in: query
+          name: gstin
+          schema: { type: string }
+      responses:
+        '200':
+          description: File download
+          content:
+            text/csv: { schema: { type: string, format: binary } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ClientDto:
+      type: object
+      properties:
+        clientId: { type: string, format: uuid }
+        companyName: { type: string }
+        contactName: { type: string }
+        email: { type: string }
+        mobile: { type: string }
+        gstin: { type: string }
+        state: { type: string }
+        city: { type: string }
+        createdByUserName: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        displayName: { type: string }
+    PagedClientResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ClientDto' }
+        totalCount: { type: integer }
+        pageNumber: { type: integer }
+        pageSize: { type: integer }
+        hasMore: { type: boolean }
+        searchExecutedIn: { type: string }
+    SavedSearchDto:
+      type: object
+      properties:
+        savedSearchId: { type: string, format: uuid }
+        searchName: { type: string }
+        filterCriteria: { type: object, additionalProperties: true }
+        sortBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    SaveSearchFilterRequest:
+      type: object
+      required: [searchName, filterCriteria]
+      properties:
+        searchName: { type: string, maxLength: 255 }
+        filterCriteria: { type: object, additionalProperties: true }
+        sortBy: { type: string }
+    SavedSearchResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/SavedSearchDto' }

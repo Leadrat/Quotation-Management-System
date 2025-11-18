@@ -1,0 +1,209 @@
+openapi: 3.0.3
+info:
+  title: CRM RBAC - Roles API
+  version: 1.0.0
+servers:
+  - url: https://api.crm.com
+paths:
+  /api/v1/roles:
+    get:
+      summary: List roles
+      security:
+        - bearerAuth: []
+      tags: [Roles]
+      parameters:
+        - in: query
+          name: isActive
+          schema:
+            type: boolean
+        - in: query
+          name: pageNumber
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedRoleList'
+      x-authorization:
+        roles: [Admin]
+    post:
+      summary: Create role
+      security:
+        - bearerAuth: []
+      tags: [Roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDto'
+        '409':
+          description: Duplicate role name
+      x-authorization:
+        roles: [Admin]
+  /api/v1/roles/{roleId}:
+    get:
+      summary: Get role by id
+      security:
+        - bearerAuth: []
+      tags: [Roles]
+      parameters:
+        - in: path
+          name: roleId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDto'
+        '404':
+          description: Not found
+      x-authorization:
+        roles: [Admin]
+    put:
+      summary: Update role
+      security:
+        - bearerAuth: []
+      tags: [Roles]
+      parameters:
+        - in: path
+          name: roleId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDto'
+        '400':
+          description: Cannot modify built-in roles
+        '404':
+          description: Not found
+        '409':
+          description: Duplicate role name
+      x-authorization:
+        roles: [Admin]
+    delete:
+      summary: Delete (soft) role
+      security:
+        - bearerAuth: []
+      tags: [Roles]
+      parameters:
+        - in: path
+          name: roleId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '400':
+          description: Built-in role or role in use
+        '404':
+          description: Not found
+      x-authorization:
+        roles: [Admin]
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RoleDto:
+      type: object
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        roleName:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        userCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [roleId, roleName, isActive, userCount, createdAt, updatedAt]
+    CreateRoleRequest:
+      type: object
+      properties:
+        roleName:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+      required: [roleName]
+    UpdateRoleRequest:
+      type: object
+      properties:
+        roleName:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+        isActive:
+          type: boolean
+    PagedRoleList:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleDto'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer

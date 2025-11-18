@@ -1,0 +1,21 @@
+# Visual Studio / .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+# Build outputs
+**/bin/
+**/obj/
+# Logs
+*.log
+# Env
+.env*
+!.env.example
+# Node (if present)
+node_modules/
+dist/
+build/
+# Tests
+TestResults/
+coverage/

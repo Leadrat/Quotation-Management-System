@@ -1,0 +1,476 @@
+openapi: 3.0.0
+info:
+  title: CRM Notification System API
+  version: 1.0.0
+  description: API endpoints for real-time notification management, preferences, and delivery tracking
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  /notifications:
+    get:
+      summary: Get user notifications (inbox)
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unread
+          in: query
+          schema:
+            type: boolean
+          description: Filter by unread status
+        - name: archived
+          in: query
+          schema:
+            type: boolean
+          description: Filter by archived status
+        - name: eventType
+          in: query
+          schema:
+            type: string
+          description: Filter by event type
+        - name: entityType
+          in: query
+          schema:
+            type: string
+          description: Filter by related entity type
+        - name: entityId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by related entity ID
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter from date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter to date
+        - name: pageNumber
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NotificationDto'
+                      pageNumber:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      totalCount:
+                        type: integer
+
+  /notifications/mark-read:
+    post:
+      summary: Mark notification(s) as read
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notificationIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Array of notification IDs, or empty array to mark all as read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notifications/archive:
+    post:
+      summary: Archive notification(s)
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notificationIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Array of notification IDs, or empty array to archive all
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notifications/unarchive:
+    post:
+      summary: Unarchive notification(s)
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notificationIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notifications/preferences:
+    get:
+      summary: Get user notification preferences
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/NotificationPreferencesDto'
+    post:
+      summary: Update user notification preferences
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferencesRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/NotificationPreferencesDto'
+
+  /notifications/unread-count:
+    get:
+      summary: Get unread notification count
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+
+  /notifications/entity/{entityType}/{entityId}:
+    get:
+      summary: Get notification history for a specific entity
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entityType
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Entity type (e.g., Quotation, Approval)
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Entity ID
+      responses:
+        '200':
+          description: List of notifications for the entity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationDto'
+
+  /notifications/logs:
+    get:
+      summary: Get email notification logs (admin/audit)
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: recipientEmail
+          in: query
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: pageNumber
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Email notification logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EmailNotificationLogDto'
+                      pageNumber:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      totalCount:
+                        type: integer
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    NotificationDto:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        recipientUserId:
+          type: string
+          format: uuid
+        relatedEntityType:
+          type: string
+        relatedEntityId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        message:
+          type: string
+        isRead:
+          type: boolean
+        isArchived:
+          type: boolean
+        deliveredChannels:
+          type: string
+        deliveryStatus:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+
+    NotificationPreferencesDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        preferences:
+          type: object
+          description: JSON object with event type preferences
+          additionalProperties:
+            type: object
+            properties:
+              inApp:
+                type: boolean
+              email:
+                type: boolean
+              push:
+                type: boolean
+              muted:
+                type: boolean
+
+    UpdateNotificationPreferencesRequest:
+      type: object
+      required:
+        - preferences
+      properties:
+        preferences:
+          type: object
+          description: JSON object with event type preferences
+          additionalProperties:
+            type: object
+            properties:
+              inApp:
+                type: boolean
+              email:
+                type: boolean
+              push:
+                type: boolean
+              muted:
+                type: boolean
+
+    EmailNotificationLogDto:
+      type: object
+      properties:
+        logId:
+          type: string
+          format: uuid
+        notificationId:
+          type: string
+          format: uuid
+          nullable: true
+        recipientEmail:
+          type: string
+        eventType:
+          type: string
+        subject:
+          type: string
+        sentAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+        errorMsg:
+          type: string
+          nullable: true
+        retryCount:
+          type: integer
+
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+
