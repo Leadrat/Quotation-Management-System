@@ -35,6 +35,12 @@ export async function apiFetch<T>(path: string, options: RequestInit & { auth?: 
     (error as any).details = details;
     throw error;
   }
+  // Handle blob responses (for file downloads)
+  const contentType = res.headers.get("content-type");
+  if (contentType && (contentType.includes("application/octet-stream") || contentType.includes("text/csv"))) {
+    return res.blob() as unknown as T;
+  }
+  
   // try parse json
   const text = await res.text();
   if (!text) return undefined as T;
@@ -1088,7 +1094,7 @@ export const AdminApi = {
     apiFetch<{ success: boolean; data: import("../types/admin").AuditLogDto }>(
       `/api/v1/admin/audit-logs/${id}`
     ),
-  exportAuditLogs: (params?: {
+  exportAuditLogs: async (params?: {
     actionType?: string;
     entity?: string;
     performedBy?: string;
@@ -1101,19 +1107,31 @@ export const AdminApi = {
     if (params?.performedBy) query.append("performedBy", params.performedBy);
     if (params?.startDate) query.append("startDate", params.startDate);
     if (params?.endDate) query.append("endDate", params.endDate);
-    return apiFetch<Blob>(
-      `/api/v1/admin/audit-logs/export${query.toString() ? `?${query.toString()}` : ""}`,
-      { method: "GET" }
-    ).then(async (blob) => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `audit-logs-${new Date().toISOString().split("T")[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+    
+    const url = `${API_BASE}/api/v1/admin/audit-logs/export${query.toString() ? `?${query.toString()}` : ""}`;
+    const token = getAccessToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    
+    const res = await fetch(url, {
+      method: "GET",
+      headers,
+      credentials: "include",
     });
+    
+    if (!res.ok) {
+      throw new Error(`Failed to export audit logs: ${res.statusText}`);
+    }
+    
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = `audit-logs-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(downloadUrl);
+    document.body.removeChild(a);
   },
 
   // Branding
