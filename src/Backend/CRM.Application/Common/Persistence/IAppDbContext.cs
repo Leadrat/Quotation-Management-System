@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using CRM.Domain.Entities;
 using CRM.Domain.Admin;
+using CRM.Domain.UserManagement;
 
 namespace CRM.Application.Common.Persistence
 {
@@ -52,6 +53,38 @@ namespace CRM.Application.Common.Persistence
         DbSet<CustomBranding> CustomBranding { get; }
         DbSet<DataRetentionPolicy> DataRetentionPolicies { get; }
         DbSet<NotificationSettings> NotificationSettings { get; }
+
+        // Company Details
+        DbSet<Domain.Entities.CompanyDetails> CompanyDetails { get; }
+        DbSet<Domain.Entities.BankDetails> BankDetails { get; }
+        
+        // Country-Specific Company Identifiers (Spec-023)
+        DbSet<Domain.Entities.IdentifierType> IdentifierTypes { get; }
+        DbSet<Domain.Entities.CountryIdentifierConfiguration> CountryIdentifierConfigurations { get; }
+        DbSet<Domain.Entities.BankFieldType> BankFieldTypes { get; }
+        DbSet<Domain.Entities.CountryBankFieldConfiguration> CountryBankFieldConfigurations { get; }
+
+        // User Management
+        DbSet<Team> Teams { get; }
+        DbSet<TeamMember> TeamMembers { get; }
+        DbSet<UserGroup> UserGroups { get; }
+        DbSet<UserGroupMember> UserGroupMembers { get; }
+        DbSet<TaskAssignment> TaskAssignments { get; }
+        DbSet<UserActivity> UserActivities { get; }
+        DbSet<Mention> Mentions { get; }
+
+        // Tax Management
+        DbSet<Country> Countries { get; }
+        DbSet<Jurisdiction> Jurisdictions { get; }
+        DbSet<TaxFramework> TaxFrameworks { get; }
+        DbSet<TaxRate> TaxRates { get; }
+        DbSet<ProductServiceCategory> ProductServiceCategories { get; }
+        DbSet<TaxCalculationLog> TaxCalculationLogs { get; }
+
+        // Product Catalog
+        DbSet<Product> Products { get; }
+        DbSet<ProductCategory> ProductCategories { get; }
+        DbSet<ProductPriceHistory> ProductPriceHistory { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

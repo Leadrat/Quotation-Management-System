@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
@@ -15,6 +15,7 @@
     "@fullcalendar/list": "^6.1.15",
     "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.15",
+    "@microsoft/signalr": "^10.0.0",
     "@tailwindcss/forms": "^0.5.10",
     "apexcharts": "^4.3.0",
     "class-variance-authority": "^0.7.1",
@@ -25,6 +26,7 @@
     "react": "19.2.0",
     "react-apexcharts": "^1.7.0",
     "react-dom": "19.2.0",
+    "react-dropzone": "^14.3.8",
     "swiper": "^11.2.0",
     "tailwind-merge": "^2.6.0",
     "zustand": "^5.0.8"

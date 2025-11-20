@@ -11,6 +11,7 @@ type AccessLink = {
   lastViewedAt?: string;
   viewCount?: number;
   viewUrl: string;
+  isActive: boolean;
 };
 
 export default function QuotationAnalyticsPage() {

@@ -1,0 +1,834 @@
+openapi: 3.0.3
+info:
+  title: CRM API - Product Catalog & Pricing
+  version: 1.0.0
+  description: Product catalog and pricing management endpoints for Spec-021
+servers:
+  - url: https://api.crm.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /products:
+    get:
+      summary: List all products (with filters)
+      tags: [Products]
+      parameters:
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+        - in: query
+          name: productType
+          schema: { type: string, enum: [Subscription, AddOnSubscription, AddOnOneTime, CustomDevelopment] }
+          description: Filter by product type
+        - in: query
+          name: categoryId
+          schema: { type: string, format: uuid }
+          description: Filter by category
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+          description: Filter by active status
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Search by product name
+        - in: query
+          name: currency
+          schema: { type: string, pattern: '^[A-Z]{3}$' }
+          description: Filter by currency (ISO 4217)
+      responses:
+        '200':
+          description: Paged result of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProductResult'
+        '401': { description: Unauthorized }
+    post:
+      summary: Create product (admin only)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /products/{productId}:
+    get:
+      summary: Get product details
+      tags: [Products]
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '401': { description: Unauthorized }
+        '404': { description: Not Found }
+    put:
+      summary: Update product (admin only)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    delete:
+      summary: Delete/disable product (admin only)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: No Content }
+        '400': { description: Product is in use by quotations }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+  /products/catalog:
+    get:
+      summary: Get product catalog for quotation selector
+      tags: [Products]
+      description: Returns active products formatted for quotation selector (search, filter, pagination)
+      parameters:
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 20, maximum: 100 }
+        - in: query
+          name: productType
+          schema: { type: string, enum: [Subscription, AddOnSubscription, AddOnOneTime, CustomDevelopment] }
+        - in: query
+          name: categoryId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: currency
+          schema: { type: string, pattern: '^[A-Z]{3}$' }
+      responses:
+        '200':
+          description: Paged result of catalog items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProductCatalogResult'
+        '401': { description: Unauthorized }
+  /products/calculate-price:
+    post:
+      summary: Calculate product price for given quantity and billing cycle
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculateProductPriceRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPriceCalculationResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '404': { description: Product not found }
+  /products/{productId}/usage:
+    get:
+      summary: Get product usage statistics (admin only)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductUsageStatsResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+  /product-categories:
+    get:
+      summary: List product categories
+      tags: [ProductCategories]
+      parameters:
+        - in: query
+          name: parentCategoryId
+          schema: { type: string, format: uuid }
+          description: Filter by parent category
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductCategoryResponse'
+        '401': { description: Unauthorized }
+    post:
+      summary: Create product category (admin only)
+      tags: [ProductCategories]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductCategoryRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCategoryResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /product-categories/{categoryId}:
+    get:
+      summary: Get product category by ID
+      tags: [ProductCategories]
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCategoryResponse'
+        '401': { description: Unauthorized }
+        '404': { description: Not Found }
+    put:
+      summary: Update product category (admin only)
+      tags: [ProductCategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductCategoryRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCategoryResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+  /quotations/{quotationId}/line-items/product:
+    put:
+      summary: Add product to quotation
+      tags: [Quotations]
+      parameters:
+        - in: path
+          name: quotationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddProductToQuotationRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationLineItemResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Quotation or Product not found }
+  /quotations/{quotationId}/line-items/{lineItemId}:
+    put:
+      summary: Update line item (quantity, billing cycle, hours)
+      tags: [Quotations]
+      parameters:
+        - in: path
+          name: quotationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: lineItemId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuotationLineItemRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationLineItemResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden }
+        '404': { description: Not Found }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ProductResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        productName:
+          type: string
+          maxLength: 200
+        productType:
+          type: string
+          enum: [Subscription, AddOnSubscription, AddOnOneTime, CustomDevelopment]
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        basePricePerUserPerMonth:
+          type: number
+          format: decimal
+          nullable: true
+        billingCycleMultipliers:
+          type: object
+          nullable: true
+          properties:
+            quarterly:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+            halfYearly:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+            yearly:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+            multiYear:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+        addOnPricing:
+          type: object
+          nullable: true
+          properties:
+            pricingType:
+              type: string
+              enum: [subscription, oneTime]
+            monthlyPrice:
+              type: number
+              format: decimal
+            fixedPrice:
+              type: number
+              format: decimal
+        customDevelopmentPricing:
+          type: object
+          nullable: true
+          properties:
+            pricingModel:
+              type: string
+              enum: [hourly, fixed, projectBased]
+            hourlyRate:
+              type: number
+              format: decimal
+            fixedPrice:
+              type: number
+              format: decimal
+            baseProjectPrice:
+              type: number
+              format: decimal
+            estimatedHours:
+              type: number
+              format: decimal
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateProductRequest:
+      type: object
+      required: [productName, productType, currency]
+      properties:
+        productName:
+          type: string
+          maxLength: 200
+        productType:
+          type: string
+          enum: [Subscription, AddOnSubscription, AddOnOneTime, CustomDevelopment]
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        basePricePerUserPerMonth:
+          type: number
+          format: decimal
+          minimum: 0
+        billingCycleMultipliers:
+          type: object
+          properties:
+            quarterly:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+            halfYearly:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+            yearly:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+            multiYear:
+              type: number
+              format: decimal
+              minimum: 0
+              maximum: 1
+        addOnPricing:
+          type: object
+          properties:
+            pricingType:
+              type: string
+              enum: [subscription, oneTime]
+            monthlyPrice:
+              type: number
+              format: decimal
+            fixedPrice:
+              type: number
+              format: decimal
+        customDevelopmentPricing:
+          type: object
+          properties:
+            pricingModel:
+              type: string
+              enum: [hourly, fixed, projectBased]
+            hourlyRate:
+              type: number
+              format: decimal
+            fixedPrice:
+              type: number
+              format: decimal
+            baseProjectPrice:
+              type: number
+              format: decimal
+            estimatedHours:
+              type: number
+              format: decimal
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        isActive:
+          type: boolean
+          default: true
+    UpdateProductRequest:
+      type: object
+      properties:
+        productName:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        basePricePerUserPerMonth:
+          type: number
+          format: decimal
+          minimum: 0
+        billingCycleMultipliers:
+          type: object
+        addOnPricing:
+          type: object
+        customDevelopmentPricing:
+          type: object
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        isActive:
+          type: boolean
+    PagedProductResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+    ProductCatalogItem:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        productName:
+          type: string
+        productType:
+          type: string
+          enum: [Subscription, AddOnSubscription, AddOnOneTime, CustomDevelopment]
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        basePricePerUserPerMonth:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        pricingSummary:
+          type: string
+          description: Human-readable pricing summary
+    PagedProductCatalogResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductCatalogItem'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+    CalculateProductPriceRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          format: decimal
+          minimum: 1
+        billingCycle:
+          type: string
+          enum: [Monthly, Quarterly, HalfYearly, Yearly, MultiYear]
+        hours:
+          type: number
+          format: decimal
+          minimum: 0
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: Target currency for conversion (if different from product currency)
+    ProductPriceCalculationResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        productName:
+          type: string
+        unitRate:
+          type: number
+          format: decimal
+        quantity:
+          type: number
+          format: decimal
+        billingCycle:
+          type: string
+          nullable: true
+        hours:
+          type: number
+          format: decimal
+          nullable: true
+        subtotal:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        calculationBreakdown:
+          type: string
+          description: Human-readable calculation breakdown
+    ProductUsageStatsResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        productName:
+          type: string
+        quotationCount:
+          type: integer
+        totalQuantitySold:
+          type: number
+          format: decimal
+        totalRevenue:
+          type: number
+          format: decimal
+        averageQuantityPerQuotation:
+          type: number
+          format: decimal
+        mostRecentUsageDate:
+          type: string
+          format: date-time
+          nullable: true
+    ProductCategoryResponse:
+      type: object
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        categoryCode:
+          type: string
+        description:
+          type: string
+        parentCategoryId:
+          type: string
+          format: uuid
+          nullable: true
+        parentCategoryName:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateProductCategoryRequest:
+      type: object
+      required: [categoryName, categoryCode]
+      properties:
+        categoryName:
+          type: string
+          maxLength: 100
+        categoryCode:
+          type: string
+          maxLength: 50
+          pattern: '^[A-Z0-9_]+$'
+        description:
+          type: string
+        parentCategoryId:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+          default: true
+    UpdateProductCategoryRequest:
+      type: object
+      properties:
+        categoryName:
+          type: string
+          maxLength: 100
+        categoryCode:
+          type: string
+          maxLength: 50
+          pattern: '^[A-Z0-9_]+$'
+        description:
+          type: string
+        parentCategoryId:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+    AddProductToQuotationRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          format: decimal
+          minimum: 1
+        billingCycle:
+          type: string
+          enum: [Monthly, Quarterly, HalfYearly, Yearly, MultiYear]
+        hours:
+          type: number
+          format: decimal
+          minimum: 0
+        discountAmount:
+          type: number
+          format: decimal
+          minimum: 0
+    UpdateQuotationLineItemRequest:
+      type: object
+      properties:
+        quantity:
+          type: number
+          format: decimal
+          minimum: 1
+        billingCycle:
+          type: string
+          enum: [Monthly, Quarterly, HalfYearly, Yearly, MultiYear]
+        hours:
+          type: number
+          format: decimal
+          minimum: 0
+        discountAmount:
+          type: number
+          format: decimal
+          minimum: 0
+    QuotationLineItemResponse:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+          format: uuid
+        quotationId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+          nullable: true
+        productName:
+          type: string
+          nullable: true
+        description:
+          type: string
+        quantity:
+          type: number
+          format: decimal
+        unitRate:
+          type: number
+          format: decimal
+        amount:
+          type: number
+          format: decimal
+        billingCycle:
+          type: string
+          nullable: true
+        hours:
+          type: number
+          format: decimal
+          nullable: true
+        originalProductPrice:
+          type: number
+          format: decimal
+          nullable: true
+        discountAmount:
+          type: number
+          format: decimal
+          nullable: true
+        taxCategoryId:
+          type: string
+          format: uuid
+          nullable: true
+        sequenceNumber:
+          type: integer
+

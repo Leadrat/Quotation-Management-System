@@ -42,12 +42,9 @@ public class CreateUserCommandHandler
         }
 
         Guid? managerId = cmd.ReportingManagerId;
-        if (cmd.RoleId == RoleIds.SalesRep)
+        // Validate reporting manager if provided (optional for all roles including SalesRep)
+        if (managerId != null)
         {
-            if (managerId == null)
-            {
-                throw new DomainValidationException("SalesRep requires ReportingManagerId");
-            }
             var manager = await _db.Users.Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.UserId == managerId.Value);
             if (manager == null || !manager.IsActive || manager.RoleId != RoleIds.Manager)

@@ -27,8 +27,8 @@ export function ApprovalDecisionModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
     if (reason.trim().length < 10) {
       setError("Reason must be at least 10 characters.");
       return;
@@ -80,8 +80,8 @@ export function ApprovalDecisionModal({
 
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <Label htmlFor="reason" required>
-            Reason for {action === "approve" ? "Approval" : "Rejection"}
+          <Label htmlFor="reason">
+            Reason for {action === "approve" ? "Approval" : "Rejection"} <span className="text-red-500">*</span>
           </Label>
           <TextArea
             value={reason}
@@ -115,15 +115,15 @@ export function ApprovalDecisionModal({
         )}
 
         <div className="flex items-center justify-end gap-3">
-          <Button type="button" size="sm" variant="outline" onClick={onClose} disabled={submitting}>
+          <Button size="sm" variant="outline" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
           <Button
-            type="submit"
             size="sm"
             variant={action === "approve" ? "primary" : "outline"}
             className={action === "reject" ? "bg-red-500 text-white hover:bg-red-600" : ""}
             disabled={submitting || reason.trim().length < 10}
+            onClick={handleSubmit}
           >
             {submitting ? `${action === "approve" ? "Approving" : "Rejecting"}...` : action === "approve" ? "Approve" : "Reject"}
           </Button>

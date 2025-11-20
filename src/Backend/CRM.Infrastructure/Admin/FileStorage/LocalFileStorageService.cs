@@ -1,5 +1,4 @@
 using System.IO;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 
 namespace CRM.Infrastructure.Admin.FileStorage;
@@ -10,13 +9,13 @@ namespace CRM.Infrastructure.Admin.FileStorage;
 public class LocalFileStorageService : IFileStorageService
 {
     private readonly string _basePath;
-    private readonly IWebHostEnvironment _environment;
 
-    public LocalFileStorageService(IWebHostEnvironment environment, IConfiguration configuration)
+    public LocalFileStorageService(IConfiguration configuration)
     {
-        _environment = environment;
-        _basePath = configuration["FileStorage:BasePath"] 
-            ?? Path.Combine(_environment.WebRootPath ?? _environment.ContentRootPath, "uploads");
+        var configuredPath = configuration["FileStorage:BasePath"];
+        _basePath = string.IsNullOrWhiteSpace(configuredPath)
+            ? Path.Combine(Environment.CurrentDirectory, "wwwroot", "uploads")
+            : configuredPath;
         
         // Ensure base directory exists
         if (!Directory.Exists(_basePath))
@@ -27,13 +26,35 @@ public class LocalFileStorageService : IFileStorageService
 
     public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string contentType, string folder)
     {
-        // Validate file type
-        var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".svg" };
+        // Validate file type based on folder
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         
-        if (!allowedExtensions.Contains(extension))
+        if (folder == "templates")
         {
-            throw new ArgumentException($"File type {extension} is not allowed. Allowed types: {string.Join(", ", allowedExtensions)}");
+            // Template files: PDF, Word, Excel, HTML
+            var allowedTemplateExtensions = new[] { ".pdf", ".doc", ".docx", ".html", ".htm", ".xls", ".xlsx" };
+            if (!allowedTemplateExtensions.Contains(extension))
+            {
+                throw new ArgumentException($"File type {extension} is not allowed for templates. Allowed types: {string.Join(", ", allowedTemplateExtensions)}");
+            }
+        }
+        else if (folder == "company-logos")
+        {
+            // Company logos: PNG, JPG, JPEG, SVG, WEBP
+            var allowedLogoExtensions = new[] { ".png", ".jpg", ".jpeg", ".svg", ".webp" };
+            if (!allowedLogoExtensions.Contains(extension))
+            {
+                throw new ArgumentException($"File type {extension} is not allowed for company logos. Allowed types: {string.Join(", ", allowedLogoExtensions)}");
+            }
+        }
+        else
+        {
+            // Default: images only
+            var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".svg" };
+            if (!allowedExtensions.Contains(extension))
+            {
+                throw new ArgumentException($"File type {extension} is not allowed. Allowed types: {string.Join(", ", allowedExtensions)}");
+            }
         }
 
         // Create folder directory if it doesn't exist
@@ -62,7 +83,12 @@ public class LocalFileStorageService : IFileStorageService
     {
         // Remove leading slash if present
         var cleanPath = filePath.TrimStart('/');
-        var fullPath = Path.Combine(_environment.WebRootPath ?? _environment.ContentRootPath, cleanPath);
+        // If path starts with "uploads/", remove it since _basePath already includes it
+        if (cleanPath.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanPath = cleanPath.Substring("uploads/".Length);
+        }
+        var fullPath = Path.Combine(_basePath, cleanPath);
 
         if (File.Exists(fullPath))
         {
@@ -75,7 +101,12 @@ public class LocalFileStorageService : IFileStorageService
     public Task<bool> FileExistsAsync(string filePath)
     {
         var cleanPath = filePath.TrimStart('/');
-        var fullPath = Path.Combine(_environment.WebRootPath ?? _environment.ContentRootPath, cleanPath);
+        // If path starts with "uploads/", remove it since _basePath already includes it
+        if (cleanPath.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanPath = cleanPath.Substring("uploads/".Length);
+        }
+        var fullPath = Path.Combine(_basePath, cleanPath);
         return Task.FromResult(File.Exists(fullPath));
     }
 }

@@ -1,0 +1,379 @@
+openapi: 3.0.3
+info:
+  title: Company Details API
+  description: Admin-only API for managing company details configuration including tax identification numbers, banking information, and branding assets.
+  version: 1.0.0
+  contact:
+    name: CRM API Support
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: CompanyDetails
+    description: Company details configuration management
+
+paths:
+  /company-details:
+    get:
+      tags:
+        - CompanyDetails
+      summary: Get company details
+      description: Retrieves the current company details configuration. Returns empty object if not yet configured.
+      operationId: getCompanyDetails
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Company details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CompanyDetailsDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - CompanyDetails
+      summary: Update company details
+      description: Updates the company details configuration. Creates the record if it doesn't exist (singleton pattern). Requires Admin role.
+      operationId: updateCompanyDetails
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCompanyDetailsRequest'
+      responses:
+        '200':
+          description: Company details updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Company details updated successfully
+                  data:
+                    $ref: '#/components/schemas/CompanyDetailsDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - PAN number must be in format: ABCDE1234F (5 letters, 4 digits, 1 letter)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/v1/auth/login
+
+  schemas:
+    CompanyDetailsDto:
+      type: object
+      description: Company details data transfer object
+      properties:
+        companyDetailsId:
+          type: string
+          format: uuid
+          example: "00000000-0000-0000-0000-000000000001"
+        panNumber:
+          type: string
+          nullable: true
+          maxLength: 10
+          pattern: '^[A-Z]{5}[0-9]{4}[A-Z]{1}$'
+          example: "ABCDE1234F"
+          description: Permanent Account Number (India)
+        tanNumber:
+          type: string
+          nullable: true
+          maxLength: 10
+          pattern: '^[A-Z]{4}[0-9]{5}[A-Z]{1}$'
+          example: "ABCD12345E"
+          description: Tax Deduction and Collection Account Number (India)
+        gstNumber:
+          type: string
+          nullable: true
+          maxLength: 15
+          pattern: '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'
+          example: "27ABCDE1234F1Z5"
+          description: Goods and Services Tax Identification Number (India)
+        companyName:
+          type: string
+          nullable: true
+          maxLength: 255
+          example: "Acme Corporation Pvt. Ltd."
+        companyAddress:
+          type: string
+          nullable: true
+          example: "123 Business Street, Suite 100"
+        city:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "Mumbai"
+        state:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "Maharashtra"
+        postalCode:
+          type: string
+          nullable: true
+          maxLength: 20
+          example: "400001"
+        country:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "India"
+        contactEmail:
+          type: string
+          nullable: true
+          format: email
+          maxLength: 255
+          example: "contact@acme.com"
+        contactPhone:
+          type: string
+          nullable: true
+          maxLength: 20
+          example: "+91-22-12345678"
+        website:
+          type: string
+          nullable: true
+          format: uri
+          maxLength: 255
+          example: "https://www.acme.com"
+        legalDisclaimer:
+          type: string
+          nullable: true
+          example: "This quotation is valid for 30 days from the date of issue."
+        logoUrl:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: "/uploads/company/logo/abc123-def456-ghi789.png"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-27T10:30:00Z"
+        bankDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/BankDetailsDto'
+          description: Country-specific bank details
+
+    BankDetailsDto:
+      type: object
+      description: Bank details for a specific country
+      properties:
+        bankDetailsId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-4789-a0b1-c2d3e4f5a6b7"
+        country:
+          type: string
+          enum:
+            - India
+            - Dubai
+          example: "India"
+          description: Country for which these bank details apply
+        accountNumber:
+          type: string
+          maxLength: 50
+          example: "1234567890123456"
+        ifscCode:
+          type: string
+          nullable: true
+          maxLength: 11
+          pattern: '^[A-Z]{4}0[A-Z0-9]{6}$'
+          example: "HDFC0001234"
+          description: IFSC Code (required for India)
+        iban:
+          type: string
+          nullable: true
+          maxLength: 34
+          example: "AE070331234567890123456"
+          description: IBAN (required for Dubai)
+        swiftCode:
+          type: string
+          nullable: true
+          maxLength: 11
+          pattern: '^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'
+          example: "HDFCINBB"
+          description: SWIFT/BIC Code (required for Dubai)
+        bankName:
+          type: string
+          maxLength: 255
+          example: "HDFC Bank"
+        branchName:
+          type: string
+          nullable: true
+          maxLength: 255
+          example: "Mumbai Main Branch"
+
+    UpdateCompanyDetailsRequest:
+      type: object
+      description: Request model for updating company details
+      properties:
+        panNumber:
+          type: string
+          nullable: true
+          maxLength: 10
+          pattern: '^[A-Z]{5}[0-9]{4}[A-Z]{1}$'
+          example: "ABCDE1234F"
+        tanNumber:
+          type: string
+          nullable: true
+          maxLength: 10
+          pattern: '^[A-Z]{4}[0-9]{5}[A-Z]{1}$'
+          example: "ABCD12345E"
+        gstNumber:
+          type: string
+          nullable: true
+          maxLength: 15
+          pattern: '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'
+          example: "27ABCDE1234F1Z5"
+        companyName:
+          type: string
+          nullable: true
+          maxLength: 255
+          example: "Acme Corporation Pvt. Ltd."
+        companyAddress:
+          type: string
+          nullable: true
+          example: "123 Business Street, Suite 100"
+        city:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "Mumbai"
+        state:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "Maharashtra"
+        postalCode:
+          type: string
+          nullable: true
+          maxLength: 20
+          example: "400001"
+        country:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "India"
+        contactEmail:
+          type: string
+          nullable: true
+          format: email
+          maxLength: 255
+          example: "contact@acme.com"
+        contactPhone:
+          type: string
+          nullable: true
+          maxLength: 20
+          example: "+91-22-12345678"
+        website:
+          type: string
+          nullable: true
+          format: uri
+          maxLength: 255
+          example: "https://www.acme.com"
+        legalDisclaimer:
+          type: string
+          nullable: true
+          example: "This quotation is valid for 30 days from the date of issue."
+        logoUrl:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: "/uploads/company/logo/abc123-def456-ghi789.png"
+        bankDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/BankDetailsDto'
+          description: Country-specific bank details (at least one required)
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Unauthorized"
+
+    Forbidden:
+      description: Forbidden - User does not have Admin role
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Forbidden - Admin role required"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "An error occurred while processing your request"
+

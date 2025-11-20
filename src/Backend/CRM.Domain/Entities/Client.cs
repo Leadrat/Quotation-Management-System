@@ -19,6 +19,8 @@ namespace CRM.Domain.Entities
         public string? City { get; set; }
         public string? State { get; set; }
         public string? PinCode { get; set; }
+        public Guid? CountryId { get; set; }
+        public Guid? JurisdictionId { get; set; }
         public Guid CreatedByUserId { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }

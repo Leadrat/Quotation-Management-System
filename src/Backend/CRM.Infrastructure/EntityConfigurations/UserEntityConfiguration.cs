@@ -42,5 +42,27 @@ public class UserEntityConfiguration : IEntityTypeConfiguration<User>
             .WithMany(m => m.DirectReports)
             .HasForeignKey(u => u.ReportingManagerId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Enhanced profile properties
+        builder.Property(u => u.AvatarUrl).HasMaxLength(500);
+        builder.Property(u => u.Bio).HasMaxLength(500);
+        builder.Property(u => u.LinkedInUrl).HasMaxLength(255);
+        builder.Property(u => u.TwitterUrl).HasMaxLength(255);
+        builder.Property(u => u.Skills).HasColumnType("jsonb");
+        builder.Property(u => u.OutOfOfficeStatus).IsRequired().HasDefaultValue(false);
+        builder.Property(u => u.OutOfOfficeMessage).HasMaxLength(1000);
+        builder.Property(u => u.PresenceStatus)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.HasOne(u => u.DelegateUser)
+            .WithMany(d => d.DelegatedToMe)
+            .HasForeignKey(u => u.DelegateUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Indexes for new properties
+        builder.HasIndex(u => u.DelegateUserId);
+        builder.HasIndex(u => u.LastSeenAt);
+        builder.HasIndex(u => u.PresenceStatus);
     }
 }

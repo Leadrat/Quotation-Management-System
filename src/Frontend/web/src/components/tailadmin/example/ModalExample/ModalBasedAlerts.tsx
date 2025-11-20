@@ -3,13 +3,15 @@ import React from "react";
 import ComponentCard from "../../common/ComponentCard";
 
 import { Modal } from "../../ui/modal";
-import { useModal } from "@/hooks/useModal";
-
 export default function ModalBasedAlerts() {
-  const successModal = useModal();
-  const infoModal = useModal();
-  const warningModal = useModal();
-  const errorModal = useModal();
+  const [successOpen, setSuccessOpen] = React.useState(false);
+  const [infoOpen, setInfoOpen] = React.useState(false);
+  const [warningOpen, setWarningOpen] = React.useState(false);
+  const [errorOpen, setErrorOpen] = React.useState(false);
+  const successModal = { isOpen: successOpen, openModal: () => setSuccessOpen(true), closeModal: () => setSuccessOpen(false) };
+  const infoModal = { isOpen: infoOpen, openModal: () => setInfoOpen(true), closeModal: () => setInfoOpen(false) };
+  const warningModal = { isOpen: warningOpen, openModal: () => setWarningOpen(true), closeModal: () => setWarningOpen(false) };
+  const errorModal = { isOpen: errorOpen, openModal: () => setErrorOpen(true), closeModal: () => setErrorOpen(false) };
   return (
     <ComponentCard title="Modal Based Alerts">
       <div className="flex flex-wrap items-center gap-3">

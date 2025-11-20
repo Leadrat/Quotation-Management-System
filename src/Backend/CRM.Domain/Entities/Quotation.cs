@@ -23,6 +23,11 @@ namespace CRM.Domain.Entities
         public decimal? SgstAmount { get; set; }
         public decimal? IgstAmount { get; set; }
         public decimal TotalAmount { get; set; }
+        public Guid? TaxCountryId { get; set; }
+        public Guid? TaxJurisdictionId { get; set; }
+        public Guid? TaxFrameworkId { get; set; }
+        public string? TaxBreakdown { get; set; } // JSONB
+        public string? CompanyDetailsSnapshot { get; set; } // JSONB - Snapshot of company details at quotation creation
         public string? Notes { get; set; }
         public bool IsPendingApproval { get; set; }
         public Guid? PendingApprovalId { get; set; }

@@ -29,9 +29,12 @@ export default function NewClientPage() {
     
     try {
       // Combine phoneCode and mobile for backend validation
-      const mobileWithCode = form.phoneCode && form.mobile 
-        ? `${form.phoneCode}${form.mobile.replace(/^\+/, '')}` 
-        : form.mobile || form.phoneCode;
+      let mobileWithCode: string | undefined;
+      if (form.phoneCode && form.mobile) {
+        mobileWithCode = `${form.phoneCode}${form.mobile.replace(/^\+/, '')}`;
+      } else {
+        mobileWithCode = form.mobile || form.phoneCode || undefined;
+      }
       
       const payload = {
         companyName: form.companyName,
@@ -54,11 +57,27 @@ export default function NewClientPage() {
       // Handle validation errors
       if (e.status === 400 && e.errors) {
         const errors: Record<string, string> = {};
+        // Map backend PascalCase property names to frontend camelCase field names
+        const fieldNameMap: Record<string, string> = {
+          'CompanyName': 'companyName',
+          'Email': 'email',
+          'Mobile': 'mobile',
+          'ContactName': 'contactName',
+          'Gstin': 'gstin',
+          'StateCode': 'stateCode',
+          'Address': 'address',
+          'City': 'city',
+          'State': 'state',
+          'PinCode': 'pinCode',
+          'PhoneCode': 'phoneCode'
+        };
+        
         Object.keys(e.errors).forEach(key => {
+          const frontendKey = fieldNameMap[key] || key.toLowerCase();
           if (Array.isArray(e.errors[key])) {
-            errors[key] = e.errors[key][0];
+            errors[frontendKey] = e.errors[key][0];
           } else {
-            errors[key] = e.errors[key];
+            errors[frontendKey] = e.errors[key];
           }
         });
         setFieldErrors(errors);

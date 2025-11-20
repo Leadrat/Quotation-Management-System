@@ -163,6 +163,9 @@ namespace CRM.Tests.Quotations
                 PendingReminders.Add(quotation.QuotationId);
                 return Task.CompletedTask;
             }
+
+            public Task SendSimpleEmailAsync(string recipientEmail, string subject, string htmlBody)
+                => Task.CompletedTask;
         }
     }
 }

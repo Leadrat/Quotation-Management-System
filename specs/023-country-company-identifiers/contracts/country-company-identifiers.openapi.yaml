@@ -1,0 +1,1266 @@
+openapi: 3.0.3
+info:
+  title: Country-Specific Company Identifiers & Bank Details API
+  description: Admin-only API for managing country-specific company identifiers and bank details configuration, including master configuration of identifier types and bank field types per country.
+  version: 1.0.0
+  contact:
+    name: CRM API Support
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: IdentifierTypes
+    description: Master configuration for identifier types (PAN, VAT, etc.)
+  - name: CountryIdentifierConfigurations
+    description: Country-specific identifier type configurations
+  - name: CompanyIdentifiers
+    description: Company identifier values per country
+  - name: BankFieldTypes
+    description: Master configuration for bank field types (IFSC, IBAN, etc.)
+  - name: CountryBankFieldConfigurations
+    description: Country-specific bank field type configurations
+  - name: CompanyBankDetails
+    description: Company bank detail values per country
+
+paths:
+  /identifier-types:
+    get:
+      tags:
+        - IdentifierTypes
+      summary: Get all identifier types
+      description: Retrieves all active identifier types for master configuration.
+      operationId: getIdentifierTypes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Identifier types retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IdentifierTypeDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - IdentifierTypes
+      summary: Create identifier type
+      description: Creates a new identifier type for master configuration. Requires Admin role.
+      operationId: createIdentifierType
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIdentifierTypeRequest'
+      responses:
+        '201':
+          description: Identifier type created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Identifier type created successfully
+                  data:
+                    $ref: '#/components/schemas/IdentifierTypeDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /identifier-types/{identifierTypeId}:
+    put:
+      tags:
+        - IdentifierTypes
+      summary: Update identifier type
+      description: Updates an existing identifier type. Requires Admin role.
+      operationId: updateIdentifierType
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: identifierTypeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIdentifierTypeRequest'
+      responses:
+        '200':
+          description: Identifier type updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Identifier type updated successfully
+                  data:
+                    $ref: '#/components/schemas/IdentifierTypeDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /countries/{countryId}/identifier-configurations:
+    get:
+      tags:
+        - CountryIdentifierConfigurations
+      summary: Get identifier configurations for country
+      description: Retrieves all identifier type configurations for a specific country.
+      operationId: getCountryIdentifierConfigurations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Identifier configurations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CountryIdentifierConfigurationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - CountryIdentifierConfigurations
+      summary: Configure identifier type for country
+      description: Configures an identifier type for a specific country with validation rules. Requires Admin role.
+      operationId: configureCountryIdentifier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigureCountryIdentifierRequest'
+      responses:
+        '201':
+          description: Identifier configuration created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Identifier configuration created successfully
+                  data:
+                    $ref: '#/components/schemas/CountryIdentifierConfigurationDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /countries/{countryId}/identifier-configurations/{configurationId}:
+    put:
+      tags:
+        - CountryIdentifierConfigurations
+      summary: Update identifier configuration for country
+      description: Updates an identifier type configuration for a specific country. Requires Admin role.
+      operationId: updateCountryIdentifierConfiguration
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: configurationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCountryIdentifierConfigurationRequest'
+      responses:
+        '200':
+          description: Identifier configuration updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Identifier configuration updated successfully
+                  data:
+                    $ref: '#/components/schemas/CountryIdentifierConfigurationDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /company-details/{countryId}/identifiers:
+    get:
+      tags:
+        - CompanyIdentifiers
+      summary: Get company identifier values for country
+      description: Retrieves company identifier values for a specific country.
+      operationId: getCompanyIdentifierValues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Company identifier values retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CompanyIdentifierValuesDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - CompanyIdentifiers
+      summary: Save company identifier values for country
+      description: Saves company identifier values for a specific country. Requires Admin role. Validates values against country configuration rules.
+      operationId: saveCompanyIdentifierValues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveCompanyIdentifierValuesRequest'
+      responses:
+        '200':
+          description: Company identifier values saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Company identifier values saved successfully
+                  data:
+                    $ref: '#/components/schemas/CompanyIdentifierValuesDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bank-field-types:
+    get:
+      tags:
+        - BankFieldTypes
+      summary: Get all bank field types
+      description: Retrieves all active bank field types for master configuration.
+      operationId: getBankFieldTypes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Bank field types retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BankFieldTypeDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - BankFieldTypes
+      summary: Create bank field type
+      description: Creates a new bank field type for master configuration. Requires Admin role.
+      operationId: createBankFieldType
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBankFieldTypeRequest'
+      responses:
+        '201':
+          description: Bank field type created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bank field type created successfully
+                  data:
+                    $ref: '#/components/schemas/BankFieldTypeDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bank-field-types/{bankFieldTypeId}:
+    put:
+      tags:
+        - BankFieldTypes
+      summary: Update bank field type
+      description: Updates an existing bank field type. Requires Admin role.
+      operationId: updateBankFieldType
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bankFieldTypeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBankFieldTypeRequest'
+      responses:
+        '200':
+          description: Bank field type updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bank field type updated successfully
+                  data:
+                    $ref: '#/components/schemas/BankFieldTypeDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /countries/{countryId}/bank-field-configurations:
+    get:
+      tags:
+        - CountryBankFieldConfigurations
+      summary: Get bank field configurations for country
+      description: Retrieves all bank field type configurations for a specific country.
+      operationId: getCountryBankFieldConfigurations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Bank field configurations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CountryBankFieldConfigurationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - CountryBankFieldConfigurations
+      summary: Configure bank field type for country
+      description: Configures a bank field type for a specific country with validation rules. Requires Admin role.
+      operationId: configureCountryBankField
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigureCountryBankFieldRequest'
+      responses:
+        '201':
+          description: Bank field configuration created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bank field configuration created successfully
+                  data:
+                    $ref: '#/components/schemas/CountryBankFieldConfigurationDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /countries/{countryId}/bank-field-configurations/{configurationId}:
+    put:
+      tags:
+        - CountryBankFieldConfigurations
+      summary: Update bank field configuration for country
+      description: Updates a bank field type configuration for a specific country. Requires Admin role.
+      operationId: updateCountryBankFieldConfiguration
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: configurationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCountryBankFieldConfigurationRequest'
+      responses:
+        '200':
+          description: Bank field configuration updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Bank field configuration updated successfully
+                  data:
+                    $ref: '#/components/schemas/CountryBankFieldConfigurationDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /company-details/{countryId}/bank-details:
+    get:
+      tags:
+        - CompanyBankDetails
+      summary: Get company bank details for country
+      description: Retrieves company bank details for a specific country.
+      operationId: getCompanyBankDetails
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Company bank details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CompanyBankDetailsDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - CompanyBankDetails
+      summary: Save company bank details for country
+      description: Saves company bank details for a specific country. Requires Admin role. Validates values against country configuration rules.
+      operationId: saveCompanyBankDetails
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: countryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveCompanyBankDetailsRequest'
+      responses:
+        '200':
+          description: Company bank details saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Company bank details saved successfully
+                  data:
+                    $ref: '#/components/schemas/CompanyBankDetailsDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/v1/auth/login
+
+  schemas:
+    IdentifierTypeDto:
+      type: object
+      description: Identifier type data transfer object
+      properties:
+        identifierTypeId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-4789-a0b1-c2d3e4f5a6b7"
+        name:
+          type: string
+          example: "PAN"
+        displayName:
+          type: string
+          example: "PAN Number"
+        description:
+          type: string
+          nullable: true
+          example: "Permanent Account Number for India"
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-27T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-27T10:30:00Z"
+
+    CreateIdentifierTypeRequest:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          example: "PAN"
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "PAN Number"
+        description:
+          type: string
+          nullable: true
+          example: "Permanent Account Number for India"
+
+    UpdateIdentifierTypeRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "PAN Number"
+        description:
+          type: string
+          nullable: true
+          example: "Permanent Account Number for India"
+        isActive:
+          type: boolean
+          example: true
+
+    CountryIdentifierConfigurationDto:
+      type: object
+      description: Country-specific identifier configuration
+      properties:
+        configurationId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-4890-b1c2-d3e4f5a6b7c8"
+        countryId:
+          type: string
+          format: uuid
+          example: "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d9"
+        identifierTypeId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-4789-a0b1-c2d3e4f5a6b7"
+        identifierTypeName:
+          type: string
+          example: "PAN"
+        identifierTypeDisplayName:
+          type: string
+          example: "PAN Number"
+        isRequired:
+          type: boolean
+          example: true
+        validationRegex:
+          type: string
+          nullable: true
+          example: "^[A-Z]{5}[0-9]{4}[A-Z]{1}$"
+        minLength:
+          type: integer
+          nullable: true
+          example: 10
+        maxLength:
+          type: integer
+          nullable: true
+          example: 10
+        displayName:
+          type: string
+          nullable: true
+          example: "PAN Number"
+        helpText:
+          type: string
+          nullable: true
+          example: "10-character alphanumeric Permanent Account Number"
+        displayOrder:
+          type: integer
+          example: 1
+        isActive:
+          type: boolean
+          example: true
+
+    ConfigureCountryIdentifierRequest:
+      type: object
+      required:
+        - identifierTypeId
+        - isRequired
+      properties:
+        identifierTypeId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-4789-a0b1-c2d3e4f5a6b7"
+        isRequired:
+          type: boolean
+          example: true
+        validationRegex:
+          type: string
+          nullable: true
+          example: "^[A-Z]{5}[0-9]{4}[A-Z]{1}$"
+        minLength:
+          type: integer
+          nullable: true
+          minimum: 0
+          example: 10
+        maxLength:
+          type: integer
+          nullable: true
+          minimum: 1
+          example: 10
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "PAN Number"
+        helpText:
+          type: string
+          nullable: true
+          example: "10-character alphanumeric Permanent Account Number"
+        displayOrder:
+          type: integer
+          minimum: 0
+          example: 1
+        isActive:
+          type: boolean
+          example: true
+
+    UpdateCountryIdentifierConfigurationRequest:
+      type: object
+      properties:
+        isRequired:
+          type: boolean
+          example: true
+        validationRegex:
+          type: string
+          nullable: true
+          example: "^[A-Z]{5}[0-9]{4}[A-Z]{1}$"
+        minLength:
+          type: integer
+          nullable: true
+          minimum: 0
+        maxLength:
+          type: integer
+          nullable: true
+          minimum: 1
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 100
+        helpText:
+          type: string
+          nullable: true
+        displayOrder:
+          type: integer
+          minimum: 0
+        isActive:
+          type: boolean
+
+    CompanyIdentifierValuesDto:
+      type: object
+      description: Company identifier values for a country
+      properties:
+        countryId:
+          type: string
+          format: uuid
+          example: "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d9"
+        values:
+          type: object
+          description: Identifier type name to value mapping
+          additionalProperties:
+            type: string
+          example:
+            PAN: "ABCDE1234F"
+            TAN: "ABCD12345E"
+            GST: "27ABCDE1234F1Z5"
+        configurations:
+          type: array
+          description: Active identifier configurations for this country
+          items:
+            $ref: '#/components/schemas/CountryIdentifierConfigurationDto'
+
+    SaveCompanyIdentifierValuesRequest:
+      type: object
+      required:
+        - values
+      properties:
+        values:
+          type: object
+          description: Identifier type name to value mapping
+          additionalProperties:
+            type: string
+          example:
+            PAN: "ABCDE1234F"
+            TAN: "ABCD12345E"
+            GST: "27ABCDE1234F1Z5"
+
+    BankFieldTypeDto:
+      type: object
+      description: Bank field type data transfer object
+      properties:
+        bankFieldTypeId:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-4901-d2e3-f4a5b6c7d8e9"
+        name:
+          type: string
+          example: "IFSC"
+        displayName:
+          type: string
+          example: "IFSC Code"
+        description:
+          type: string
+          nullable: true
+          example: "Indian Financial System Code"
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-27T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-27T10:30:00Z"
+
+    CreateBankFieldTypeRequest:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          example: "IFSC"
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "IFSC Code"
+        description:
+          type: string
+          nullable: true
+          example: "Indian Financial System Code"
+
+    UpdateBankFieldTypeRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "IFSC Code"
+        description:
+          type: string
+          nullable: true
+          example: "Indian Financial System Code"
+        isActive:
+          type: boolean
+          example: true
+
+    CountryBankFieldConfigurationDto:
+      type: object
+      description: Country-specific bank field configuration
+      properties:
+        configurationId:
+          type: string
+          format: uuid
+          example: "e5f6a7b8-c9d0-4901-e2f3-a4b5c6d7e8f9"
+        countryId:
+          type: string
+          format: uuid
+          example: "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d9"
+        bankFieldTypeId:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-4901-d2e3-f4a5b6c7d8e9"
+        bankFieldTypeName:
+          type: string
+          example: "IFSC"
+        bankFieldTypeDisplayName:
+          type: string
+          example: "IFSC Code"
+        isRequired:
+          type: boolean
+          example: true
+        validationRegex:
+          type: string
+          nullable: true
+          example: "^[A-Z]{4}0[0-9A-Z]{6}$"
+        minLength:
+          type: integer
+          nullable: true
+          example: 11
+        maxLength:
+          type: integer
+          nullable: true
+          example: 11
+        displayName:
+          type: string
+          nullable: true
+          example: "IFSC Code"
+        helpText:
+          type: string
+          nullable: true
+          example: "11-character alphanumeric Indian Financial System Code"
+        displayOrder:
+          type: integer
+          example: 1
+        isActive:
+          type: boolean
+          example: true
+
+    ConfigureCountryBankFieldRequest:
+      type: object
+      required:
+        - bankFieldTypeId
+        - isRequired
+      properties:
+        bankFieldTypeId:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-4901-d2e3-f4a5b6c7d8e9"
+        isRequired:
+          type: boolean
+          example: true
+        validationRegex:
+          type: string
+          nullable: true
+          example: "^[A-Z]{4}0[0-9A-Z]{6}$"
+        minLength:
+          type: integer
+          nullable: true
+          minimum: 0
+          example: 11
+        maxLength:
+          type: integer
+          nullable: true
+          minimum: 1
+          example: 11
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: "IFSC Code"
+        helpText:
+          type: string
+          nullable: true
+          example: "11-character alphanumeric Indian Financial System Code"
+        displayOrder:
+          type: integer
+          minimum: 0
+          example: 1
+        isActive:
+          type: boolean
+          example: true
+
+    UpdateCountryBankFieldConfigurationRequest:
+      type: object
+      properties:
+        isRequired:
+          type: boolean
+          example: true
+        validationRegex:
+          type: string
+          nullable: true
+          example: "^[A-Z]{4}0[0-9A-Z]{6}$"
+        minLength:
+          type: integer
+          nullable: true
+          minimum: 0
+        maxLength:
+          type: integer
+          nullable: true
+          minimum: 1
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 100
+        helpText:
+          type: string
+          nullable: true
+        displayOrder:
+          type: integer
+          minimum: 0
+        isActive:
+          type: boolean
+
+    CompanyBankDetailsDto:
+      type: object
+      description: Company bank details for a country
+      properties:
+        bankDetailsId:
+          type: string
+          format: uuid
+          nullable: true
+          example: "f6a7b8c9-d0e1-4901-f2a3-b4c5d6e7f8a9"
+        countryId:
+          type: string
+          format: uuid
+          example: "c3d4e5f6-a7b8-4901-c2d3-e4f5a6b7c8d9"
+        values:
+          type: object
+          description: Bank field type name to value mapping
+          additionalProperties:
+            type: string
+          example:
+            IFSC: "HDFC0001234"
+            AccountNumber: "1234567890"
+            BankName: "HDFC Bank"
+            BranchName: "Mumbai"
+        configurations:
+          type: array
+          description: Active bank field configurations for this country
+          items:
+            $ref: '#/components/schemas/CountryBankFieldConfigurationDto'
+
+    SaveCompanyBankDetailsRequest:
+      type: object
+      required:
+        - values
+      properties:
+        values:
+          type: object
+          description: Bank field type name to value mapping
+          additionalProperties:
+            type: string
+          example:
+            IFSC: "HDFC0001234"
+            AccountNumber: "1234567890"
+            BankName: "HDFC Bank"
+            BranchName: "Mumbai"
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              errors:
+                type: array
+                items:
+                  type: string
+                example:
+                  - PAN number must be in format: ABCDE1234F (5 letters, 4 digits, 1 letter)
+                  - Required field missing: IFSC Code
+
+    Unauthorized:
+      description: Unauthorized - Invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Unauthorized"
+
+    Forbidden:
+      description: Forbidden - User does not have Admin role
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Forbidden - Admin role required"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "Resource not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: "An error occurred while processing your request"
+

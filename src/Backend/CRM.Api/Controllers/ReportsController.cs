@@ -34,6 +34,7 @@ namespace CRM.Api.Controllers
         private readonly GetAuditComplianceReportQueryHandler _auditHandler;
         private readonly ExportReportCommandHandler _exportHandler;
         private readonly IAppDbContext _db;
+        private readonly IValidator<GetSalesDashboardMetricsQuery> _salesDashboardValidator;
 
         public ReportsController(
             GetSalesDashboardMetricsQueryHandler salesDashboardHandler,
@@ -46,7 +47,8 @@ namespace CRM.Api.Controllers
             GetForecastingDataQueryHandler forecastingHandler,
             GetAuditComplianceReportQueryHandler auditHandler,
             ExportReportCommandHandler exportHandler,
-            IAppDbContext db)
+            IAppDbContext db,
+            IValidator<GetSalesDashboardMetricsQuery> salesDashboardValidator)
         {
             _salesDashboardHandler = salesDashboardHandler;
             _teamPerformanceHandler = teamPerformanceHandler;
@@ -59,6 +61,7 @@ namespace CRM.Api.Controllers
             _auditHandler = auditHandler;
             _exportHandler = exportHandler;
             _db = db;
+            _salesDashboardValidator = salesDashboardValidator;
         }
 
         [HttpGet("dashboard/sales")]
@@ -67,21 +70,50 @@ namespace CRM.Api.Controllers
             [FromQuery] DateTime? fromDate = null,
             [FromQuery] DateTime? toDate = null)
         {
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            if (!Guid.TryParse(userIdClaim, out var userId))
+            try
             {
-                return Unauthorized(new { error = "Invalid user token" });
+                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+                {
+                    return Unauthorized(new { error = "Invalid user token", details = "UserId claim is missing or invalid" });
+                }
+
+                var role = User.FindFirstValue("role") ?? string.Empty;
+
+                var query = new GetSalesDashboardMetricsQuery
+                {
+                    UserId = userId,
+                    RequestorRole = role,
+                    FromDate = fromDate,
+                    ToDate = toDate
+                };
+
+                var validationResult = await _salesDashboardValidator.ValidateAsync(query);
+                if (!validationResult.IsValid)
+                {
+                    return BadRequest(new 
+                    { 
+                        error = "Validation failed", 
+                        errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList(),
+                        details = $"UserId: {query.UserId}, FromDate: {query.FromDate}, ToDate: {query.ToDate}"
+                    });
+                }
+
+                var result = await _salesDashboardHandler.Handle(query);
+                return Ok(new { success = true, data = result });
             }
-
-            var query = new GetSalesDashboardMetricsQuery
+            catch (Exception ex)
             {
-                UserId = userId,
-                FromDate = fromDate,
-                ToDate = toDate
-            };
-
-            var result = await _salesDashboardHandler.Handle(query);
-            return Ok(new { success = true, data = result });
+                // Log the full exception for debugging
+                var errorDetails = new
+                {
+                    error = "An error occurred while processing the request",
+                    message = ex.Message,
+                    stackTrace = System.Diagnostics.Debugger.IsAttached ? ex.StackTrace : null,
+                    innerException = ex.InnerException?.Message
+                };
+                return StatusCode(500, errorDetails);
+            }
         }
 
         [HttpGet("dashboard/manager")]
@@ -152,6 +184,96 @@ namespace CRM.Api.Controllers
             return Ok(new { success = true, data = result });
         }
 
+        [HttpGet("dashboard/stats")]
+        [Authorize(Roles = "SalesRep,Manager,Admin,Client")]
+        public async Task<IActionResult> GetDashboardStats()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+                {
+                    return Unauthorized(new { error = "Invalid user token", details = "UserId claim is missing or invalid" });
+                }
+
+                var role = User.FindFirstValue("role") ?? string.Empty;
+                var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+                // Get total clients count
+                var clientsQuery = _db.Clients.AsNoTracking().Where(c => c.DeletedAt == null);
+                if (!isAdmin)
+                {
+                    clientsQuery = clientsQuery.Where(c => c.CreatedByUserId == userId);
+                }
+                var totalClients = await clientsQuery.CountAsync();
+
+                // Get total quotations count
+                var quotationsQuery = _db.Quotations.AsNoTracking();
+                if (!isAdmin)
+                {
+                    quotationsQuery = quotationsQuery.Where(q => q.CreatedByUserId == userId);
+                }
+                var totalQuotations = await quotationsQuery.CountAsync();
+
+                // Get pending approvals count
+                var approvalsQuery = _db.DiscountApprovals.AsNoTracking()
+                    .Where(a => a.Status == Domain.Enums.ApprovalStatus.Pending);
+                if (!isAdmin)
+                {
+                    approvalsQuery = approvalsQuery.Where(a => a.RequestedByUserId == userId);
+                }
+                var pendingApprovals = await approvalsQuery.CountAsync();
+
+                // Get total payments count (join with Quotations to filter by user)
+                int totalPayments = 0;
+                try
+                {
+                    if (!isAdmin)
+                    {
+                        // For non-admin users, filter payments by joining with quotations
+                        totalPayments = await _db.Payments
+                            .AsNoTracking()
+                            .Join(_db.Quotations,
+                                p => p.QuotationId,
+                                q => q.QuotationId,
+                                (p, q) => new { Payment = p, Quotation = q })
+                            .Where(x => x.Quotation.CreatedByUserId == userId)
+                            .CountAsync();
+                    }
+                    else
+                    {
+                        // Admin sees all payments
+                        totalPayments = await _db.Payments.AsNoTracking().CountAsync();
+                    }
+                }
+                catch
+                {
+                    // Payments table might not exist yet or might have issues
+                    totalPayments = 0;
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        totalClients,
+                        totalQuotations,
+                        totalPayments,
+                        pendingApprovals
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    error = "An error occurred while processing the request",
+                    message = ex.Message
+                });
+            }
+        }
+
         [HttpGet("dashboard/admin")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAdminDashboard()
@@ -162,6 +284,7 @@ namespace CRM.Api.Controllers
             var approvalMetrics = await _approvalMetricsHandler.Handle(new GetApprovalWorkflowMetricsQuery());
 
             var activeUsers = await _db.Users.CountAsync(u => u.IsActive);
+            var totalClients = await _db.Clients.CountAsync(c => c.DeletedAt == null);
             var totalQuotations = await _db.Quotations.CountAsync();
             var totalRevenue = await _db.Payments
                 .Where(p => p.PaymentStatus == PaymentStatus.Success)
@@ -183,6 +306,7 @@ namespace CRM.Api.Controllers
                     ActiveUsers = activeUsers,
                     ActiveSalesReps = activeSalesReps,
                     ActiveManagers = activeManagers,
+                    TotalClientsLifetime = totalClients,
                     TotalQuotationsLifetime = totalQuotations,
                     TotalRevenue = totalRevenue,
                     SystemHealth = new SystemHealthData

@@ -30,10 +30,10 @@ export function LocalizedText({
       const lang = languageCode || prefs?.languageCode || "en";
       
       const resources = await LocalizationApi.getLocalizationResources(lang);
-      const resource = resources.find(r => r.resourceKey === resourceKey);
+      const resourceValue = resources[resourceKey];
       
-      if (resource) {
-        setText(resource.resourceValue);
+      if (resourceValue) {
+        setText(resourceValue);
       } else if (fallback) {
         setText(fallback);
       } else {

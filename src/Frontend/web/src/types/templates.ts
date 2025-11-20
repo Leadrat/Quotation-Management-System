@@ -38,6 +38,13 @@ export interface QuotationTemplate {
   lineItems: TemplateLineItem[];
   isActive: boolean;
   isEditable: boolean;
+  // File-based template properties
+  templateType?: "Quotation" | "ProFormaInvoice";
+  fileName?: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  isFileBased?: boolean;
 }
 
 export interface CreateQuotationTemplateRequest {

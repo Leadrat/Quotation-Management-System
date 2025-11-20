@@ -306,6 +306,7 @@ export interface AdminDashboardMetrics {
   activeUsers: number;
   activeSalesReps: number;
   activeManagers: number;
+  totalClientsLifetime: number;
   totalQuotationsLifetime: number;
   totalRevenue: number;
   systemHealth: SystemHealthData;

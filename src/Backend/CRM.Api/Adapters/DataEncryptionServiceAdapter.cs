@@ -3,7 +3,7 @@ using CRM.Infrastructure.Admin.Encryption;
 
 namespace CRM.Api.Adapters;
 
-public class DataEncryptionServiceAdapter : IDataEncryptionService
+public class DataEncryptionServiceAdapter : CRM.Application.Common.Services.IDataEncryptionService
 {
     private readonly Infrastructure.Admin.Encryption.IDataEncryptionService _infrastructureService;
 

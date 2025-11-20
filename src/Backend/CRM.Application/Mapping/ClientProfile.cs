@@ -9,7 +9,10 @@ namespace CRM.Application.Mapping
         public ClientProfile()
         {
             CreateMap<Client, ClientDto>()
-                .ForMember(d => d.CreatedByUserName, o => o.MapFrom(s => s.CreatedByUser.FirstName + " " + s.CreatedByUser.LastName))
+                .ForMember(d => d.CreatedByUserName, o => o.MapFrom(s => 
+                    s.CreatedByUser != null 
+                        ? $"{s.CreatedByUser.FirstName ?? ""} {s.CreatedByUser.LastName ?? ""}".Trim()
+                        : ""))
                 .ForMember(d => d.DisplayName, o => o.MapFrom(s => s.GetDisplayName()));
         }
     }

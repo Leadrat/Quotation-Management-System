@@ -34,9 +34,12 @@ namespace CRM.Application.Quotations.Queries.Handlers
                 throw new QuotationNotFoundException(query.QuotationId);
             }
 
-            // Authorization: User owns quotation or is admin
+            // Authorization: User owns quotation or is Manager/Admin
             var isAdmin = string.Equals(query.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin && quotation.CreatedByUserId != query.RequestorUserId)
+            var isManager = string.Equals(query.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+            var canAccess = isAdmin || isManager || quotation.CreatedByUserId == query.RequestorUserId;
+            
+            if (!canAccess)
             {
                 throw new UnauthorizedAccessException("You do not have permission to view this quotation.");
             }

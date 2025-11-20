@@ -77,7 +77,7 @@ namespace CRM.Tests.Notifications
 
             // Assert
             Assert.True(result.Success);
-            Assert.Equal(1, result.Data.Length);
+            Assert.Single(result.Data);
             Assert.Equal(unreadNotification.NotificationId, result.Data[0].NotificationId);
         }
 

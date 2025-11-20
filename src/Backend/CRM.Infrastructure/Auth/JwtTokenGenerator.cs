@@ -28,15 +28,34 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var handler = new JwtSecurityTokenHandler();
+        // Get role name - use Role navigation property if available, otherwise use RoleId
+        var roleName = string.Empty;
+        if (user.Role != null && !string.IsNullOrWhiteSpace(user.Role.RoleName))
+        {
+            roleName = user.Role.RoleName;
+        }
+        else
+        {
+            roleName = CRM.Shared.Constants.RoleConstants.GetName(user.RoleId);
+        }
+        
+        // Ensure we have a valid role name
+        if (string.IsNullOrWhiteSpace(roleName))
+        {
+            _logger.LogWarning($"User {user.UserId} has invalid RoleId {user.RoleId}. Defaulting to empty role.");
+            roleName = string.Empty;
+        }
+
         var claimsList = new System.Collections.Generic.List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("firstName", user.FirstName),
-            new Claim("lastName", user.LastName),
+            new Claim("firstName", user.FirstName ?? string.Empty),
+            new Claim("lastName", user.LastName ?? string.Empty),
             new Claim("roleId", user.RoleId.ToString()), // legacy
             new Claim("role_id", user.RoleId.ToString()),
-            new Claim("role", CRM.Shared.Constants.RoleConstants.GetName(user.RoleId)),
+            new Claim("role", roleName), // Custom role claim
+            new Claim(ClaimTypes.Role, roleName), // Standard ASP.NET Core role claim for [Authorize(Roles="...")]
             new Claim("iss", _settings.Issuer),
             new Claim("aud", _settings.Audience)
         };

@@ -175,7 +175,7 @@ export function SendQuotationModal({
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="rounded bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-opacity-90 disabled:opacity-50"
+            className="rounded bg-primary px-6 py-2 text-sm font-semibold text-black dark:text-white hover:bg-opacity-90 disabled:opacity-50"
           >
             {submitting ? "Sending..." : mode === "resend" ? "Resend Quotation" : "Send Quotation"}
           </button>

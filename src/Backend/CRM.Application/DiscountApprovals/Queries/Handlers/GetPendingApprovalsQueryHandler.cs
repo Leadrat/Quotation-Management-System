@@ -30,16 +30,32 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
 
         public async Task<PagedResult<DiscountApprovalDto>> Handle(GetPendingApprovalsQuery query)
         {
-            _logger.LogInformation("Getting pending approvals for user {UserId} with role {Role}", 
-                query.RequestorUserId, query.RequestorRole);
+            try
+            {
+                _logger.LogInformation("Getting pending approvals for user {UserId} with role {Role}", 
+                    query.RequestorUserId, query.RequestorRole);
 
-            // Base query - include navigation properties
-            IQueryable<Domain.Entities.DiscountApproval> baseQuery = _db.DiscountApprovals
-                .AsNoTracking()
-                .Include(a => a.Quotation)
-                    .ThenInclude(q => q.Client)
-                .Include(a => a.RequestedByUser)
-                .Include(a => a.ApproverUser);
+                // Validate requestor user ID
+                if (query.RequestorUserId == Guid.Empty)
+                {
+                    _logger.LogWarning("Invalid RequestorUserId (empty GUID)");
+                    return new PagedResult<DiscountApprovalDto>
+                    {
+                        Success = true,
+                        Data = Array.Empty<DiscountApprovalDto>(),
+                        PageNumber = query.PageNumber,
+                        PageSize = query.PageSize,
+                        TotalCount = 0
+                    };
+                }
+
+                // Base query - include navigation properties
+                IQueryable<Domain.Entities.DiscountApproval> baseQuery = _db.DiscountApprovals
+                    .AsNoTracking()
+                    .Include(a => a.Quotation)
+                        .ThenInclude(q => q.Client)
+                    .Include(a => a.RequestedByUser)
+                    .Include(a => a.ApproverUser);
 
             // Filter by approver based on role
             if (query.RequestorRole.Equals("Manager", StringComparison.OrdinalIgnoreCase))
@@ -109,16 +125,23 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
                 .Take(query.PageSize)
                 .ToListAsync();
 
-            var dtos = approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToArray();
+                var dtos = approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToArray();
 
-            return new PagedResult<DiscountApprovalDto>
+                return new PagedResult<DiscountApprovalDto>
+                {
+                    Success = true,
+                    Data = dtos,
+                    PageNumber = query.PageNumber,
+                    PageSize = query.PageSize,
+                    TotalCount = totalCount
+                };
+            }
+            catch (Exception ex)
             {
-                Success = true,
-                Data = dtos,
-                PageNumber = query.PageNumber,
-                PageSize = query.PageSize,
-                TotalCount = totalCount
-            };
+                _logger.LogError(ex, "Error getting pending approvals for user {UserId} with role {Role}", 
+                    query.RequestorUserId, query.RequestorRole);
+                throw;
+            }
         }
     }
 }

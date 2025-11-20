@@ -51,52 +51,77 @@ namespace CRM.Api.Controllers
         [Authorize(Roles = "SalesRep,Admin")]
         public async Task<IActionResult> Search([FromQuery] SearchRequest req)
         {
-            // Normalize paging
-            if (req.PageNumber < 1) req.PageNumber = 1;
-            if (req.PageSize < 1) req.PageSize = 10;
-            if (req.PageSize > 100) req.PageSize = 100;
-
-            // Build query object from request + user context
-            var user = HttpContext.User;
-            var isAdmin = user.IsInRole("Admin");
-            var role = isAdmin ? "Admin" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty);
-            Guid.TryParse(user.Claims.FirstOrDefault(c => c.Type == "sub" || c.Type == "userId")?.Value, out var currentUserId);
-
-            var query = new SearchClientsQuery
+            try
             {
-                SearchTerm = req.SearchTerm,
-                City = req.City,
-                State = req.State,
-                StateCode = req.StateCode,
-                Gstin = req.Gstin,
-                CreatedByUserId = isAdmin ? req.UserId : null,
-                CreatedDateFrom = req.CreatedDateFrom,
-                CreatedDateTo = req.CreatedDateTo,
-                UpdatedDateFrom = req.UpdatedDateFrom,
-                UpdatedDateTo = req.UpdatedDateTo,
-                SortBy = req.SortBy,
-                PageNumber = req.PageNumber,
-                PageSize = req.PageSize,
-                IncludeDeleted = false,
-                RequestorUserId = currentUserId,
-                RequestorRole = role
-            };
+                // Normalize paging
+                if (req.PageNumber < 1) req.PageNumber = 1;
+                if (req.PageSize < 1) req.PageSize = 10;
+                if (req.PageSize > 100) req.PageSize = 100;
 
-            var sw = Stopwatch.StartNew();
-            var handler = new SearchClientsQueryHandler(_db, _mapper);
-            var result = await handler.Handle(query);
-            sw.Stop();
+                // Build query object from request + user context
+                var user = HttpContext.User;
+                var isAdmin = user.IsInRole("Admin");
+                var role = isAdmin ? "Admin" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty);
+                
+                // Try multiple claim types to find user ID
+                var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? user.FindFirst("sub")?.Value
+                    ?? user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                    ?? user.FindFirst("userId")?.Value;
 
-            return Ok(new
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var currentUserId) || currentUserId == Guid.Empty)
+                {
+                    var availableClaims = string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}"));
+                    return Unauthorized(new { success = false, error = "Invalid user token - user ID not found", details = System.Diagnostics.Debugger.IsAttached ? $"Available claims: {availableClaims}" : null });
+                }
+
+                var query = new SearchClientsQuery
+                {
+                    SearchTerm = req.SearchTerm,
+                    City = req.City,
+                    State = req.State,
+                    StateCode = req.StateCode,
+                    Gstin = req.Gstin,
+                    CreatedByUserId = isAdmin ? req.UserId : null,
+                    CreatedDateFrom = req.CreatedDateFrom,
+                    CreatedDateTo = req.CreatedDateTo,
+                    UpdatedDateFrom = req.UpdatedDateFrom,
+                    UpdatedDateTo = req.UpdatedDateTo,
+                    SortBy = req.SortBy,
+                    PageNumber = req.PageNumber,
+                    PageSize = req.PageSize,
+                    IncludeDeleted = false,
+                    RequestorUserId = currentUserId,
+                    RequestorRole = role
+                };
+
+                var sw = Stopwatch.StartNew();
+                var handler = new SearchClientsQueryHandler(_db, _mapper);
+                var result = await handler.Handle(query);
+                sw.Stop();
+
+                return Ok(new
+                {
+                    success = true,
+                    data = result.Data,
+                    pageNumber = result.PageNumber,
+                    pageSize = result.PageSize,
+                    totalCount = result.TotalCount,
+                    hasMore = (result.PageNumber * result.PageSize) < result.TotalCount,
+                    searchExecutedIn = $"{sw.ElapsedMilliseconds}ms"
+                });
+            }
+            catch (Exception ex)
             {
-                success = true,
-                data = result.Data,
-                pageNumber = result.PageNumber,
-                pageSize = result.PageSize,
-                totalCount = result.TotalCount,
-                hasMore = (result.PageNumber * result.PageSize) < result.TotalCount,
-                searchExecutedIn = $"{sw.ElapsedMilliseconds}ms"
-            });
+                // Log the full exception for debugging
+                var innerException = ex.InnerException != null ? $" Inner: {ex.InnerException.Message}" : "";
+                return StatusCode(500, new { 
+                    success = false, 
+                    error = "An error occurred while searching clients", 
+                    message = $"{ex.Message}{innerException}",
+                    stackTrace = System.Diagnostics.Debugger.IsAttached ? ex.StackTrace : null 
+                });
+            }
         }
 
         [HttpGet("search/suggestions")]

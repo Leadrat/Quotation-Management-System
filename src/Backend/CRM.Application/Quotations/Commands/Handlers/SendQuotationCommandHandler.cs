@@ -65,9 +65,18 @@ namespace CRM.Application.Quotations.Commands.Handlers
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
-            if (user?.Role == null || !string.Equals(user.Role.RoleName, "Admin", StringComparison.OrdinalIgnoreCase))
+            if (user?.Role == null)
             {
                 throw new UnauthorizedAccessException("You do not have permission to send this quotation.");
+            }
+
+            var roleName = user.Role.RoleName;
+            var isSalesRep = string.Equals(roleName, "SalesRep", StringComparison.OrdinalIgnoreCase);
+            
+            // Only SalesRep can send quotations (Admin removed from this functionality)
+            if (!isSalesRep)
+            {
+                throw new UnauthorizedAccessException("Only Sales Representatives can send quotations.");
             }
         }
 

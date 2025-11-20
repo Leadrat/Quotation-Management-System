@@ -12,6 +12,8 @@ using CRM.Application.QuotationTemplates.Queries.Handlers;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CRM.Api.Controllers
 {
@@ -21,6 +23,7 @@ namespace CRM.Api.Controllers
     public class QuotationTemplatesController : ControllerBase
     {
         private readonly CreateQuotationTemplateCommandHandler _createHandler;
+        private readonly UploadQuotationTemplateCommandHandler _uploadHandler;
         private readonly UpdateQuotationTemplateCommandHandler _updateHandler;
         private readonly DeleteQuotationTemplateCommandHandler _deleteHandler;
         private readonly RestoreQuotationTemplateCommandHandler _restoreHandler;
@@ -38,6 +41,7 @@ namespace CRM.Api.Controllers
 
         public QuotationTemplatesController(
             CreateQuotationTemplateCommandHandler createHandler,
+            UploadQuotationTemplateCommandHandler uploadHandler,
             UpdateQuotationTemplateCommandHandler updateHandler,
             DeleteQuotationTemplateCommandHandler deleteHandler,
             RestoreQuotationTemplateCommandHandler restoreHandler,
@@ -54,6 +58,7 @@ namespace CRM.Api.Controllers
             IValidator<ApplyTemplateToQuotationCommand> applyValidator)
         {
             _createHandler = createHandler;
+            _uploadHandler = uploadHandler;
             _updateHandler = updateHandler;
             _deleteHandler = deleteHandler;
             _restoreHandler = restoreHandler;
@@ -82,6 +87,55 @@ namespace CRM.Api.Controllers
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Upload a file-based quotation template
+        /// </summary>
+        [HttpPost("upload")]
+        [Authorize(Roles = "SalesRep,Admin")]
+        [ProducesResponseType(typeof(QuotationTemplateDto), 201)]
+        public async Task<IActionResult> Upload([FromForm] UploadQuotationTemplateRequest request, [FromForm] IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new { error = "File is required" });
+                }
+
+                if (!TryGetUserContext(out var userId, out _))
+                {
+                    return Unauthorized(new { error = "Invalid user token" });
+                }
+
+                // Convert IFormFile to Stream for the command
+                using var fileStream = file.OpenReadStream();
+                var command = new UploadQuotationTemplateCommand
+                {
+                    Request = request,
+                    FileStream = fileStream,
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    FileSize = file.Length,
+                    CreatedByUserId = userId
+                };
+
+                var result = await _uploadHandler.Handle(command);
+                return Created($"/api/v1/quotation-templates/{result.TemplateId}", new { success = true, data = result });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidTemplateVisibilityException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
 
         /// <summary>
@@ -210,9 +264,22 @@ namespace CRM.Api.Controllers
                 var result = await _getAllHandler.Handle(query);
                 return Ok(new { success = true, data = result });
             }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException concurrencyEx)
+            {
+                // More specific exception - catch before DbUpdateException
+                return StatusCode(500, new { error = "Concurrency error occurred.", details = concurrencyEx.Message });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                // Database-related errors
+                return StatusCode(500, new { error = "Database error occurred. Please check if the QuotationTemplates table exists and migrations are applied.", details = dbEx.Message });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                // Log the full exception for debugging
+                var logger = HttpContext.RequestServices.GetService<Microsoft.Extensions.Logging.ILogger<QuotationTemplatesController>>();
+                logger?.LogError(ex, "Error in GetAll templates endpoint: {Error}", ex.Message);
+                return StatusCode(500, new { error = ex.Message, stackTrace = ex.StackTrace });
             }
         }
 
@@ -521,6 +588,12 @@ namespace CRM.Api.Controllers
                     return Unauthorized(new { error = "Invalid user token" });
                 }
 
+                // Ensure role is not empty (default to SalesRep if empty)
+                if (string.IsNullOrWhiteSpace(role))
+                {
+                    role = "SalesRep";
+                }
+
                 var query = new GetPublicTemplatesQuery
                 {
                     RequestorUserId = userId,
@@ -532,7 +605,9 @@ namespace CRM.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                var logger = HttpContext.RequestServices.GetService<Microsoft.Extensions.Logging.ILogger<QuotationTemplatesController>>();
+                logger?.LogError(ex, "Error in GetPublic templates endpoint: {Error}", ex.Message);
+                return StatusCode(500, new { error = ex.Message, details = ex.StackTrace });
             }
         }
     }

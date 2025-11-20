@@ -29,6 +29,14 @@ namespace CRM.Domain.Entities
         public decimal? DiscountDefault { get; set; }
         public string? Notes { get; set; }
 
+        // File-based template properties
+        public string? TemplateType { get; set; } // "Quotation" or "ProFormaInvoice"
+        public bool IsFileBased { get; set; } = false;
+        public string? FileName { get; set; }
+        public string? FileUrl { get; set; } // Path or URL to stored file
+        public long? FileSize { get; set; } // File size in bytes
+        public string? MimeType { get; set; } // MIME type of the file
+
         // Navigation properties
         public virtual User OwnerUser { get; set; } = null!;
         public virtual User? ApprovedByUser { get; set; }

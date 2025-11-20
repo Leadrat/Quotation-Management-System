@@ -32,10 +32,17 @@ export default function TemplateApprovalQueuePage() {
       if (visibilityFilter) params.visibility = visibilityFilter;
 
       const result = await TemplatesApi.list(params);
-      setTemplates(result.data.data || []);
-      setTotal(result.data.totalCount || 0);
+      setTemplates(Array.isArray(result.data?.data) ? result.data.data : []);
+      setTotal(result.data?.totalCount || 0);
     } catch (err: any) {
-      setError(err.message || "Failed to load pending templates");
+      const errorMsg = err.message || "Failed to load pending templates";
+      setError(errorMsg);
+      setTemplates([]);
+      setTotal(0);
+      // Don't show error for 500 - endpoint may have issues
+      if (err.message?.includes("500")) {
+        setError("Template approval queue is temporarily unavailable. Please try again later.");
+      }
     } finally {
       setLoading(false);
     }
@@ -146,7 +153,14 @@ export default function TemplateApprovalQueuePage() {
                 </tr>
               </thead>
               <tbody>
-                {templates.map((template) => (
+                {!templates || templates.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                      No pending templates found
+                    </td>
+                  </tr>
+                ) : (
+                  templates.map((template) => (
                   <tr key={template.templateId} className="border-b border-[#eee] dark:border-strokedark">
                     <td className="px-4 py-5 dark:border-strokedark">
                       <Link href={`/templates/${template.templateId}`} className="text-primary hover:underline font-medium">
@@ -176,7 +190,8 @@ export default function TemplateApprovalQueuePage() {
                       />
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>

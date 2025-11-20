@@ -76,7 +76,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetAllQuotations(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
@@ -192,7 +192,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpPost("{quotationId}/send")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep")]
         public async Task<IActionResult> SendQuotation(Guid quotationId, [FromBody] SendQuotationRequest request)
         {
             var validation = await _sendValidator.ValidateAsync(request);
@@ -283,7 +283,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpPost("{quotationId}/resend")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep")]
         public async Task<IActionResult> ResendQuotation(Guid quotationId, [FromBody] SendQuotationRequest request)
         {
             var validation = await _sendValidator.ValidateAsync(request);
@@ -490,13 +490,13 @@ namespace CRM.Api.Controllers
                 return Forbid("You do not have permission to access this quotation.");
             }
 
-            var pdfBytes = _pdfService.GenerateQuotationPdf(quotation);
+            var pdfBytes = await _pdfService.GenerateQuotationPdfAsync(quotation);
             var fileName = $"Quotation-{quotation.QuotationNumber}.pdf";
             return File(pdfBytes, "application/pdf", fileName);
         }
 
         [HttpPost]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep")]
         public async Task<IActionResult> CreateQuotation([FromBody] CreateQuotationRequest request)
         {
             try

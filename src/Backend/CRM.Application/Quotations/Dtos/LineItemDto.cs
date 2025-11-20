@@ -1,4 +1,5 @@
 using System;
+using CRM.Domain.Enums;
 
 namespace CRM.Application.Quotations.Dtos
 {
@@ -11,6 +12,15 @@ namespace CRM.Application.Quotations.Dtos
         public decimal Quantity { get; set; }
         public decimal UnitRate { get; set; }
         public decimal Amount { get; set; }
+        
+        // Product catalog integration
+        public Guid? ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public BillingCycle? BillingCycle { get; set; }
+        public decimal? Hours { get; set; }
+        public decimal? OriginalProductPrice { get; set; }
+        public decimal? DiscountAmount { get; set; }
+        public Guid? TaxCategoryId { get; set; }
     }
 }
 

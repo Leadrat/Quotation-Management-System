@@ -7,6 +7,7 @@ namespace CRM.Application.Reports.Dtos
         public int ActiveUsers { get; set; }
         public int ActiveSalesReps { get; set; }
         public int ActiveManagers { get; set; }
+        public int TotalClientsLifetime { get; set; }
         public int TotalQuotationsLifetime { get; set; }
         public decimal TotalRevenue { get; set; }
         public SystemHealthData SystemHealth { get; set; } = new();

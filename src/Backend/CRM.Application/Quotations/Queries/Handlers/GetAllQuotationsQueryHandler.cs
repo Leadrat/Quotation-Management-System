@@ -28,6 +28,8 @@ namespace CRM.Application.Quotations.Queries.Handlers
             try
             {
                 var isAdmin = string.Equals(query.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
+                var isManager = string.Equals(query.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+                var canSeeAll = isAdmin || isManager;
 
                 var baseQuery = _db.Quotations
                     .Include(q => q.Client)
@@ -35,8 +37,8 @@ namespace CRM.Application.Quotations.Queries.Handlers
                     .Include(q => q.LineItems)
                     .AsNoTracking();
 
-                // Authorization: SalesRep sees only own quotations, Admin sees all
-                if (!isAdmin)
+                // Authorization: SalesRep sees only own quotations, Manager and Admin see all
+                if (!canSeeAll)
                 {
                     baseQuery = baseQuery.Where(q => q.CreatedByUserId == query.RequestorUserId);
                 }
@@ -47,7 +49,7 @@ namespace CRM.Application.Quotations.Queries.Handlers
                     baseQuery = baseQuery.Where(q => q.ClientId == query.ClientId.Value);
                 }
 
-                if (query.CreatedByUserId.HasValue && isAdmin)
+                if (query.CreatedByUserId.HasValue && canSeeAll)
                 {
                     baseQuery = baseQuery.Where(q => q.CreatedByUserId == query.CreatedByUserId.Value);
                 }

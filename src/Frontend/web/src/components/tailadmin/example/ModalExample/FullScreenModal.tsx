@@ -1,16 +1,14 @@
 "use client";
-import { useModal } from "@/hooks/useModal";
+import React from "react";
 import ComponentCard from "../../common/ComponentCard";
 
 import Button from "../../ui/button/Button";
 import { Modal } from "../../ui/modal";
 
 export default function FullScreenModal() {
-  const {
-    isOpen: isFullscreenModalOpen,
-    openModal: openFullscreenModal,
-    closeModal: closeFullscreenModal,
-  } = useModal();
+  const [isFullscreenModalOpen, setIsFullscreenModalOpen] = React.useState(false);
+  const openFullscreenModal = () => setIsFullscreenModalOpen(true);
+  const closeFullscreenModal = () => setIsFullscreenModalOpen(false);
   const handleSave = () => {
     // Handle save logic here
     console.log("Saving changes...");

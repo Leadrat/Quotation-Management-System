@@ -39,8 +39,7 @@ namespace CRM.Tests.DiscountApprovals
             var command = new RejectDiscountApprovalCommand
             {
                 ApprovalId = approval.ApprovalId,
-                ActorUserId = approverUserId,
-                ActorRole = "Manager",
+                RejectedByUserId = approverUserId,
                 Request = new RejectDiscountApprovalRequest
                 {
                     Reason = "Discount too high for this client segment"
@@ -50,7 +49,7 @@ namespace CRM.Tests.DiscountApprovals
             var result = await handler.Handle(command);
 
             Assert.NotNull(result);
-            Assert.Equal(ApprovalStatus.Rejected, result.Status);
+            Assert.Equal(ApprovalStatus.Rejected.ToString(), result.Status);
             Assert.NotNull(result.RejectionDate);
 
             var saved = await context.DiscountApprovals
@@ -83,8 +82,7 @@ namespace CRM.Tests.DiscountApprovals
             var command = new RejectDiscountApprovalCommand
             {
                 ApprovalId = Guid.NewGuid(),
-                ActorUserId = approverUserId,
-                ActorRole = "Manager",
+                RejectedByUserId = approverUserId,
                 Request = new RejectDiscountApprovalRequest
                 {
                     Reason = "Test reason"
@@ -109,8 +107,7 @@ namespace CRM.Tests.DiscountApprovals
             var command = new RejectDiscountApprovalCommand
             {
                 ApprovalId = approval.ApprovalId,
-                ActorUserId = approverUserId,
-                ActorRole = "Manager",
+                RejectedByUserId = approverUserId,
                 Request = new RejectDiscountApprovalRequest
                 {
                     Reason = "Test reason"
@@ -149,8 +146,8 @@ namespace CRM.Tests.DiscountApprovals
                 LastName = roleName,
                 RoleId = role.RoleId,
                 Role = role,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             });
         }
 
@@ -167,8 +164,8 @@ namespace CRM.Tests.DiscountApprovals
                 ClientId = Guid.NewGuid(),
                 CompanyName = "Test Client",
                 Email = "client@example.com",
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
             context.Clients.Add(client);
 
@@ -185,12 +182,11 @@ namespace CRM.Tests.DiscountApprovals
                 ValidUntil = DateTime.Today.AddDays(30),
                 DiscountPercentage = 15.0m,
                 SubTotal = 1000.0m,
-                TaxPercentage = 10.0m,
                 TaxAmount = 100.0m,
                 TotalAmount = 1100.0m,
                 IsPendingApproval = true,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
             context.Quotations.Add(quotation);
 
@@ -201,7 +197,7 @@ namespace CRM.Tests.DiscountApprovals
                 Quotation = quotation,
                 Status = ApprovalStatus.Pending,
                 ApprovalLevel = ApprovalLevel.Manager,
-                RequestedDiscountPercentage = 15.0m,
+                CurrentDiscountPercentage = 15.0m,
                 RequestedByUserId = requestedByUserId,
                 RequestedByUser = context.Users.First(u => u.UserId == requestedByUserId),
                 Reason = "Test reason",

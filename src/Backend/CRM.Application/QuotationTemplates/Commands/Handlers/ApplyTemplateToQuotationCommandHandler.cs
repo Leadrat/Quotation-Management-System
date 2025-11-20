@@ -75,13 +75,15 @@ namespace CRM.Application.QuotationTemplates.Commands.Handlers
                 ValidUntil = DateTime.Today.AddDays(30), // Default 30 days
                 DiscountPercentage = template.DiscountDefault ?? 0,
                 Notes = template.Notes,
-                LineItems = template.LineItems.Select(li => new CreateLineItemRequest
-                {
-                    ItemName = li.ItemName,
-                    Description = li.Description,
-                    Quantity = li.Quantity,
-                    UnitRate = li.UnitRate
-                }).ToList()
+                LineItems = template.IsFileBased 
+                    ? new List<CreateLineItemRequest>() // File-based templates don't have line items - they use the uploaded file
+                    : template.LineItems.Select(li => new CreateLineItemRequest
+                    {
+                        ItemName = li.ItemName,
+                        Description = li.Description,
+                        Quantity = li.Quantity,
+                        UnitRate = li.UnitRate
+                    }).ToList()
             };
 
             _logger.LogInformation("Template {TemplateId} applied successfully. Usage count: {UsageCount}", 

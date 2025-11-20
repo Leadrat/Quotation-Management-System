@@ -18,9 +18,15 @@ export function useBranding() {
     setError(null);
     try {
       const response = await AdminApi.getBranding();
-      setBranding(response.data);
+      setBranding(response.data || null);
     } catch (err: any) {
-      setError(err.message || "Failed to load branding settings");
+      const errorMsg = err.message || "Failed to load branding settings";
+      setError(errorMsg);
+      setBranding(null);
+      // Don't show error for 400 - may be validation issue or not set up yet
+      if (err.message?.includes("400")) {
+        setError("Branding settings are not configured yet. You can set them up below.");
+      }
     } finally {
       setLoading(false);
     }

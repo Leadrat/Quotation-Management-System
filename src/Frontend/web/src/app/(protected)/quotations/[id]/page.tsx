@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { QuotationsApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { formatCurrency, formatDate, formatDateTime, getStatusColor, getStatusLabel } from "@/utils/quotationFormatter";
 import { ClientResponseCard, QuotationStatusTimeline, SendQuotationModal } from "@/components/quotations";
 import { ApprovalTimeline, ApprovalStatusBadge, ApprovalSubmissionModal } from "@/components/approvals";
@@ -31,6 +32,13 @@ export default function ViewQuotationPage() {
   const [adjustments, setAdjustments] = useState<AdjustmentDto[]>([]);
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [selectedAdjustment, setSelectedAdjustment] = useState<AdjustmentDto | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+  }, []);
 
   useEffect(() => {
     if (quotationId) {
@@ -129,8 +137,9 @@ export default function ViewQuotationPage() {
   };
 
   const recipientFallback = quotation?.clientEmail;
-  const canSend = quotation?.status === "DRAFT";
-  const canResend = ["SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED"].includes(quotation?.status);
+  const isAdmin = role === "Admin";
+  const canSend = quotation?.status === "DRAFT" && !isAdmin; // Admin cannot send
+  const canResend = ["SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED"].includes(quotation?.status) && !isAdmin; // Admin cannot resend
 
   if (loading) {
     return (
@@ -179,7 +188,7 @@ export default function ViewQuotationPage() {
               </button>
               <button
                 onClick={() => setSendModalOpen(true)}
-                className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
+                className="rounded border border-blue-500 bg-primary px-4 py-2 text-sm text-black dark:text-white hover:bg-opacity-90"
               >
                 Send
               </button>
@@ -301,24 +310,69 @@ export default function ViewQuotationPage() {
               <span className="font-medium text-black dark:text-white">-{formatCurrency(quotation.discountAmount)}</span>
             </div>
           )}
-          {quotation.cgstAmount > 0 && (
+
+          {/* New Framework-Based Tax Breakdown */}
+          {quotation.taxBreakdown && (() => {
+            try {
+              const breakdown = typeof quotation.taxBreakdown === 'string' 
+                ? JSON.parse(quotation.taxBreakdown) 
+                : quotation.taxBreakdown;
+              if (Array.isArray(breakdown) && breakdown.length > 0) {
+                return (
+                  <div className="mt-3 pt-2 border-t border-stroke dark:border-strokedark">
+                    <div className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">Tax Breakdown:</div>
+                    {breakdown.map((component: any, idx: number) => (
+                      <div key={idx} className="flex justify-between text-xs">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {component.component} ({component.rate}%):
+                        </span>
+                        <span className="font-medium text-black dark:text-white">
+                          {formatCurrency(component.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+            } catch (e) {
+              // Fall through to legacy display
+            }
+            return null;
+          })()}
+
+          {/* Legacy Tax Display (Fallback) */}
+          {(!quotation.taxBreakdown || (() => {
+            try {
+              const breakdown = typeof quotation.taxBreakdown === 'string' 
+                ? JSON.parse(quotation.taxBreakdown) 
+                : quotation.taxBreakdown;
+              return !Array.isArray(breakdown) || breakdown.length === 0;
+            } catch {
+              return true;
+            }
+          })()) && (
             <>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
-                <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.cgstAmount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
-                <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.sgstAmount)}</span>
-              </div>
+              {quotation.cgstAmount > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.cgstAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.sgstAmount)}</span>
+                  </div>
+                </>
+              )}
+              {quotation.igstAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
+                  <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.igstAmount)}</span>
+                </div>
+              )}
             </>
           )}
-          {quotation.igstAmount > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
-              <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.igstAmount)}</span>
-            </div>
-          )}
+
           <div className="mt-3 flex justify-between border-t border-stroke pt-2 dark:border-strokedark">
             <span className="font-semibold text-black dark:text-white">Total Amount:</span>
             <span className="text-lg font-bold text-primary">{formatCurrency(quotation.totalAmount)}</span>

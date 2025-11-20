@@ -37,7 +37,7 @@ namespace CRM.Infrastructure.Migrations
                         name: "FK_Clients_Users_CreatedByUserId",
                         column: x => x.CreatedByUserId,
                         principalTable: "Users",
-                        principalColumn: "Id",
+                        principalColumn: "UserId",
                         onDelete: ReferentialAction.Restrict);
                 });
 

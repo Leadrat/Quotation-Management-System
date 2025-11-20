@@ -24,6 +24,7 @@ export default function AdminCurrenciesPage() {
     rate: 0,
     effectiveDate: new Date().toISOString().split("T")[0],
   });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -32,14 +33,18 @@ export default function AdminCurrenciesPage() {
   async function loadData() {
     try {
       setLoading(true);
+      setError(null);
       const [curr, rates] = await Promise.all([
-        LocalizationApi.getSupportedCurrencies(),
-        LocalizationApi.getExchangeRates(),
+        LocalizationApi.getSupportedCurrencies().catch(() => []),
+        LocalizationApi.getExchangeRates().catch(() => []),
       ]);
-      setCurrencies(curr);
-      setExchangeRates(rates);
-    } catch (error) {
+      setCurrencies(Array.isArray(curr) ? curr : []);
+      setExchangeRates(Array.isArray(rates) ? rates : []);
+    } catch (error: any) {
       console.error("Failed to load data", error);
+      setError(error.message || "Failed to load currency data");
+      setCurrencies([]);
+      setExchangeRates([]);
     } finally {
       setLoading(false);
     }
@@ -100,6 +105,15 @@ export default function AdminCurrenciesPage() {
         <h1 className="text-2xl font-bold">Currency & Exchange Rate Management</h1>
       </div>
 
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+          {error}
+          {error.includes("ExchangeRates") && (
+            <p className="mt-2 text-sm">Note: Exchange rates table may not be set up yet. Please run database migrations.</p>
+          )}
+        </div>
+      )}
+
       <div className="mb-4 border-b">
         <button
           onClick={() => setActiveTab("currencies")}
@@ -151,7 +165,14 @@ export default function AdminCurrenciesPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {currencies.map((currency) => (
+                {!currencies || currencies.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                      No currencies found
+                    </td>
+                  </tr>
+                ) : (
+                  currencies.map((currency) => (
                   <tr key={currency.currencyCode}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                       {currency.currencyCode}
@@ -181,7 +202,8 @@ export default function AdminCurrenciesPage() {
                       <button className="text-blue-600 hover:text-blue-900 mr-4">Edit</button>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -221,7 +243,14 @@ export default function AdminCurrenciesPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {exchangeRates.map((rate) => (
+                {!exchangeRates || exchangeRates.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                      No exchange rates found. Exchange rates table may not be set up yet.
+                    </td>
+                  </tr>
+                ) : (
+                  exchangeRates.map((rate) => (
                   <tr key={rate.exchangeRateId}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                       {rate.fromCurrencyCode}
@@ -239,7 +268,8 @@ export default function AdminCurrenciesPage() {
                       <button className="text-blue-600 hover:text-blue-900">Edit</button>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -56,6 +56,15 @@ namespace CRM.Infrastructure.EntityConfigurations
             builder.Property(x => x.IgstAmount)
                 .HasColumnType("decimal(12,2)");
 
+            builder.Property(x => x.TaxCountryId);
+            builder.Property(x => x.TaxJurisdictionId);
+            builder.Property(x => x.TaxFrameworkId);
+            builder.Property(x => x.TaxBreakdown)
+                .HasColumnType("jsonb");
+
+            builder.Property(x => x.CompanyDetailsSnapshot)
+                .HasColumnType("jsonb");
+
             builder.Property(x => x.TotalAmount)
                 .IsRequired()
                 .HasColumnType("decimal(12,2)");
@@ -120,6 +129,26 @@ namespace CRM.Infrastructure.EntityConfigurations
 
             builder.HasIndex(x => x.PendingApprovalId)
                 .HasFilter("\"PendingApprovalId\" IS NOT NULL");
+
+            // Tax management relationships
+            builder.HasOne<Country>()
+                .WithMany()
+                .HasForeignKey(x => x.TaxCountryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.HasOne<Jurisdiction>()
+                .WithMany()
+                .HasForeignKey(x => x.TaxJurisdictionId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.HasOne<TaxFramework>()
+                .WithMany()
+                .HasForeignKey(x => x.TaxFrameworkId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.HasIndex(x => x.TaxCountryId);
+            builder.HasIndex(x => x.TaxJurisdictionId);
+            builder.HasIndex(x => x.TaxFrameworkId);
         }
     }
 }

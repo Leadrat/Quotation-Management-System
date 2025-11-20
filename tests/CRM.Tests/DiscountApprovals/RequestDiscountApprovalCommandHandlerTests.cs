@@ -43,7 +43,7 @@ namespace CRM.Tests.DiscountApprovals
                 Request = new CreateDiscountApprovalRequest
                 {
                     QuotationId = quotation.QuotationId,
-                    RequestedDiscountPercentage = 15.0m,
+                    DiscountPercentage = 15.0m,
                     Reason = "Competitive pricing required for this client",
                     Comments = "Client requested discount"
                 }
@@ -52,9 +52,9 @@ namespace CRM.Tests.DiscountApprovals
             var result = await handler.Handle(command);
 
             Assert.NotNull(result);
-            Assert.Equal(ApprovalLevel.Manager, result.ApprovalLevel);
-            Assert.Equal(ApprovalStatus.Pending, result.Status);
-            Assert.Equal(15.0m, result.RequestedDiscountPercentage);
+            Assert.Equal(ApprovalLevel.Manager.ToString(), result.ApprovalLevel);
+            Assert.Equal(ApprovalStatus.Pending.ToString(), result.Status);
+            Assert.Equal(15.0m, result.CurrentDiscountPercentage);
 
             var saved = await context.DiscountApprovals
                 .FirstAsync(a => a.ApprovalId == result.ApprovalId);
@@ -82,7 +82,7 @@ namespace CRM.Tests.DiscountApprovals
                 Request = new CreateDiscountApprovalRequest
                 {
                     QuotationId = quotation.QuotationId,
-                    RequestedDiscountPercentage = 25.0m,
+                    DiscountPercentage = 25.0m,
                     Reason = "Large volume order requires significant discount",
                     Comments = "Strategic client"
                 }
@@ -91,8 +91,8 @@ namespace CRM.Tests.DiscountApprovals
             var result = await handler.Handle(command);
 
             Assert.NotNull(result);
-            Assert.Equal(ApprovalLevel.Admin, result.ApprovalLevel);
-            Assert.Equal(ApprovalStatus.Pending, result.Status);
+            Assert.Equal(ApprovalLevel.Admin.ToString(), result.ApprovalLevel);
+            Assert.Equal(ApprovalStatus.Pending.ToString(), result.Status);
         }
 
         [Fact]
@@ -114,7 +114,7 @@ namespace CRM.Tests.DiscountApprovals
                 Request = new CreateDiscountApprovalRequest
                 {
                     QuotationId = Guid.NewGuid(),
-                    RequestedDiscountPercentage = 15.0m,
+                    DiscountPercentage = 15.0m,
                     Reason = "Test reason"
                 }
             };
@@ -141,7 +141,7 @@ namespace CRM.Tests.DiscountApprovals
                 Request = new CreateDiscountApprovalRequest
                 {
                     QuotationId = quotation.QuotationId,
-                    RequestedDiscountPercentage = 15.0m,
+                    DiscountPercentage = 15.0m,
                     Reason = "First request"
                 }
             };
@@ -160,7 +160,7 @@ namespace CRM.Tests.DiscountApprovals
                 Request = new CreateDiscountApprovalRequest
                 {
                     QuotationId = quotation.QuotationId,
-                    RequestedDiscountPercentage = 15.0m,
+                    DiscountPercentage = 15.0m,
                     Reason = "Second request"
                 }
             };
@@ -186,7 +186,7 @@ namespace CRM.Tests.DiscountApprovals
                 Request = new CreateDiscountApprovalRequest
                 {
                     QuotationId = quotation.QuotationId,
-                    RequestedDiscountPercentage = 5.0m,
+                    DiscountPercentage = 5.0m,
                     Reason = "Test reason"
                 }
             };
@@ -219,8 +219,8 @@ namespace CRM.Tests.DiscountApprovals
                 LastName = "User",
                 RoleId = role.RoleId,
                 Role = role,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             });
         }
 
@@ -234,8 +234,8 @@ namespace CRM.Tests.DiscountApprovals
                 ClientId = Guid.NewGuid(),
                 CompanyName = "Test Client",
                 Email = "client@example.com",
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
             context.Clients.Add(client);
 
@@ -252,11 +252,10 @@ namespace CRM.Tests.DiscountApprovals
                 ValidUntil = DateTime.Today.AddDays(30),
                 DiscountPercentage = discountPercentage,
                 SubTotal = 1000.0m,
-                TaxPercentage = 10.0m,
                 TaxAmount = 100.0m,
                 TotalAmount = 1100.0m,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
             context.Quotations.Add(quotation);
 

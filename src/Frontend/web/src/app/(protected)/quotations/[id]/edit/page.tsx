@@ -1,11 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { QuotationsApi, ClientsApi, DiscountApprovalsApi } from "@/lib/api";
+import { QuotationsApi, ClientsApi, DiscountApprovalsApi, ProductsApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { calculateQuotationTotals } from "@/utils/taxCalculator";
 import { formatCurrency } from "@/utils/quotationFormatter";
 import { ApprovalSubmissionModal, LockedFormOverlay } from "@/components/approvals";
+import TaxCalculationPreview from "@/components/tax/TaxCalculationPreview";
+import ProductSelector from "@/components/products/ProductSelector";
 import { DiscountApproval } from "@/types/discount-approvals";
+import type { ProductCatalogItem, BillingCycle } from "@/types/products";
 
 interface LineItem {
   lineItemId?: string;
@@ -14,6 +18,13 @@ interface LineItem {
   quantity: number;
   unitRate: number;
   amount: number;
+  productServiceCategoryId?: string;
+  productId?: string;
+  billingCycle?: BillingCycle;
+  hours?: number;
+  discountAmount?: number;
+  originalProductPrice?: number;
+  taxCategoryId?: string;
 }
 
 export default function EditQuotationPage() {
@@ -32,6 +43,20 @@ export default function EditQuotationPage() {
   const [pendingApproval, setPendingApproval] = useState<DiscountApproval | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [originalDiscount, setOriginalDiscount] = useState(0);
+  const [showProductSelector, setShowProductSelector] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+
+  // Check role on mount - redirect admin
+  useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+
+    // Admin cannot edit quotations - redirect to view page
+    if (userRole === "Admin") {
+      router.replace(`/quotations/${quotationId}`);
+    }
+  }, [router, quotationId]);
 
   useEffect(() => {
     if (quotationId) {
@@ -53,12 +78,19 @@ export default function EditQuotationPage() {
       setNotes(q.notes || "");
       setLineItems(
         q.lineItems?.map((item: any) => ({
-          lineItemId: item.lineItemId,
+          lineItemId: item.lineItemId || crypto.randomUUID(),
           itemName: item.itemName,
           description: item.description || "",
           quantity: item.quantity,
           unitRate: item.unitRate,
           amount: item.amount,
+          productServiceCategoryId: item.productServiceCategoryId,
+          productId: item.productId,
+          billingCycle: item.billingCycle,
+          hours: item.hours,
+          discountAmount: item.discountAmount,
+          originalProductPrice: item.originalProductPrice,
+          taxCategoryId: item.taxCategoryId,
         })) || []
       );
 
@@ -88,12 +120,37 @@ export default function EditQuotationPage() {
   };
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { itemName: "", description: "", quantity: 1, unitRate: 0, amount: 0 }]);
+    setLineItems([...lineItems, { lineItemId: crypto.randomUUID(), itemName: "", description: "", quantity: 1, unitRate: 0, amount: 0 }]);
   };
 
   const removeLineItem = (index: number) => {
     if (lineItems.length > 1) {
       setLineItems(lineItems.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleProductSelected = async (product: ProductCatalogItem, quantity: number, billingCycle?: BillingCycle, hours?: number) => {
+    if (quotation?.status !== "DRAFT") {
+      setError("Only draft quotations can be edited");
+      return;
+    }
+    try {
+      setLoading(true);
+      await ProductsApi.addProductToQuotation(quotationId, {
+        productId: product.productId,
+        quantity: quantity,
+        billingCycle: billingCycle ? Object.keys(BillingCycle).indexOf(billingCycle) : undefined,
+        hours: hours,
+        taxCategoryId: product.categoryId,
+      });
+      
+      // Reload quotation to get updated line items
+      await loadQuotation();
+      setShowProductSelector(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to add product to quotation");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -265,14 +322,34 @@ export default function EditQuotationPage() {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <label className="block text-black dark:text-white">Line Items</label>
-            <button
-              type="button"
-              onClick={addLineItem}
-              className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
-            >
-              Add Line Item
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowProductSelector(true)}
+                disabled={isLocked}
+                className="rounded bg-brand-500 px-4 py-2 text-sm text-white hover:bg-brand-600 disabled:opacity-50"
+              >
+                Add from Catalog
+              </button>
+              <button
+                type="button"
+                onClick={addLineItem}
+                disabled={isLocked}
+                className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90 disabled:opacity-50"
+              >
+                Add Line Item
+              </button>
+            </div>
           </div>
+          
+          {showProductSelector && (
+            <div className="mb-4 rounded-lg border border-stroke bg-white p-4 dark:border-strokedark dark:bg-form-input">
+              <ProductSelector
+                onProductSelected={handleProductSelected}
+                disabled={loading || isLocked}
+              />
+            </div>
+          )}
           <div className="space-y-4">
             {lineItems.map((item, index) => (
               <div key={index} className="rounded border border-stroke p-4 dark:border-strokedark">
@@ -352,42 +429,59 @@ export default function EditQuotationPage() {
           />
         </div>
 
-        {/* Totals Summary */}
-        <div className="rounded border border-stroke bg-gray-50 p-4 dark:border-strokedark dark:bg-meta-4">
-          <h5 className="mb-3 font-semibold text-black dark:text-white">Summary</h5>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-              <span className="font-medium text-black dark:text-white">{formatCurrency(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Discount ({discountPercentage}%):</span>
-              <span className="font-medium text-black dark:text-white">-{formatCurrency(totals.discountAmount)}</span>
-            </div>
-            {totals.cgstAmount > 0 && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
-                  <span className="font-medium text-black dark:text-white">{formatCurrency(totals.cgstAmount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
-                  <span className="font-medium text-black dark:text-white">{formatCurrency(totals.sgstAmount)}</span>
-                </div>
-              </>
-            )}
-            {totals.igstAmount > 0 && (
+        {/* Tax Calculation Preview */}
+        {quotation?.clientId && (
+          <TaxCalculationPreview
+            clientId={quotation.clientId}
+            lineItems={lineItems.map(item => ({
+              lineItemId: item.lineItemId || crypto.randomUUID(),
+              productServiceCategoryId: item.productServiceCategoryId,
+              amount: item.amount,
+            }))}
+            subtotal={totals.subtotal}
+            discountAmount={totals.discountAmount}
+            calculationDate={quotationDate}
+          />
+        )}
+
+        {/* Legacy Totals Summary (Fallback when no client) */}
+        {!quotation?.clientId && (
+          <div className="rounded border border-stroke bg-gray-50 p-4 dark:border-strokedark dark:bg-meta-4">
+            <h5 className="mb-3 font-semibold text-black dark:text-white">Summary</h5>
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
-                <span className="font-medium text-black dark:text-white">{formatCurrency(totals.igstAmount)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
+                <span className="font-medium text-black dark:text-white">{formatCurrency(totals.subtotal)}</span>
               </div>
-            )}
-            <div className="mt-3 flex justify-between border-t border-stroke pt-2 dark:border-strokedark">
-              <span className="font-semibold text-black dark:text-white">Total Amount:</span>
-              <span className="text-lg font-bold text-primary">{formatCurrency(totals.totalAmount)}</span>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Discount ({discountPercentage}%):</span>
+                <span className="font-medium text-black dark:text-white">-{formatCurrency(totals.discountAmount)}</span>
+              </div>
+              {totals.cgstAmount > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(totals.cgstAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(totals.sgstAmount)}</span>
+                  </div>
+                </>
+              )}
+              {totals.igstAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
+                  <span className="font-medium text-black dark:text-white">{formatCurrency(totals.igstAmount)}</span>
+                </div>
+              )}
+              <div className="mt-3 flex justify-between border-t border-stroke pt-2 dark:border-strokedark">
+                <span className="font-semibold text-black dark:text-white">Total Amount:</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(totals.totalAmount)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-4">

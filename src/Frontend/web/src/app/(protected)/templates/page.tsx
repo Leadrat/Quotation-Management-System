@@ -86,10 +86,10 @@ export default function TemplatesListPage() {
       <div className="mb-6 flex items-center justify-between">
         <h4 className="text-title-md2 font-bold text-black dark:text-white">Quotation Templates</h4>
         <Link
-          href="/templates/create"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2.5 text-center font-medium text-white hover:bg-opacity-90"
+          href="/templates/upload"
+          className="inline-flex items-center justify-center rounded-md border-2 border-blue-500 bg-white px-6 py-2.5 text-center font-medium text-black hover:bg-blue-50 dark:bg-gray-800 dark:text-black dark:hover:bg-gray-700"
         >
-          Create Template
+          Upload Template
         </Link>
       </div>
 
@@ -184,11 +184,21 @@ export default function TemplatesListPage() {
                 {items.map((item) => (
                   <tr key={item.templateId} className="border-b border-[#eee] dark:border-strokedark">
                     <td className="px-4 py-5 dark:border-strokedark">
-                      <Link href={`/templates/${item.templateId}`} className="text-primary hover:underline font-medium">
-                        {item.name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/templates/${item.templateId}`} className="text-primary hover:underline font-medium">
+                          {item.name}
+                        </Link>
+                        {item.isFileBased && (
+                          <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                            {item.templateType || "File"}
+                          </span>
+                        )}
+                      </div>
                       {item.description && (
                         <p className="text-sm text-gray-500 mt-1">{item.description}</p>
+                      )}
+                      {item.fileName && (
+                        <p className="text-xs text-gray-400 mt-1">📄 {item.fileName}</p>
                       )}
                     </td>
                     <td className="px-4 py-5 dark:border-strokedark">

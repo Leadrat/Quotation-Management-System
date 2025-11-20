@@ -43,7 +43,10 @@ namespace CRM.Application.Quotations.Queries.Handlers
         private static void EnsureAuthorized(Guid userId, string role, Guid ownerId)
         {
             var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin && ownerId != userId)
+            var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+            var canAccess = isAdmin || isManager || ownerId == userId;
+            
+            if (!canAccess)
             {
                 throw new UnauthorizedAccessException("You do not have permission to access this quotation.");
             }

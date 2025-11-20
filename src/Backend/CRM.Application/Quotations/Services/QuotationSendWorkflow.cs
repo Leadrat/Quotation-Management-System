@@ -75,7 +75,7 @@ namespace CRM.Application.Quotations.Services
             byte[] pdfBytes;
             try
             {
-                pdfBytes = _pdfService.GenerateQuotationPdf(quotation);
+                pdfBytes = await _pdfService.GenerateQuotationPdfAsync(quotation);
             }
             catch (Exception ex)
             {

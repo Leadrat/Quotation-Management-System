@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using CRM.Infrastructure.Persistence;
 using CRM.Application.Common.Persistence;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.FileProviders;
 using CRM.Api.Filters;
 using CRM.Infrastructure.Logging;
 using CRM.Shared.Exceptions;
@@ -58,6 +60,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Map IAppDbContext to concrete AppDbContext
 builder.Services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
+builder.Services.AddSignalR();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -101,12 +104,54 @@ builder.Services.Configure<CompanySettings>(builder.Configuration.GetSection("Co
 builder.Services.Configure<QuotationManagementSettings>(builder.Configuration.GetSection("QuotationManagement"));
 builder.Services.AddScoped<CRM.Application.Quotations.Services.QuotationNumberGenerator>();
 builder.Services.AddScoped<CRM.Application.Quotations.Services.QuotationTotalsCalculator>();
-builder.Services.AddScoped<CRM.Application.Quotations.Services.TaxCalculationService>();
+builder.Services.AddScoped<CRM.Application.Quotations.Services.TaxCalculationService>(); // Legacy service
+builder.Services.AddScoped<CRM.Application.TaxManagement.Services.ITaxCalculationService, CRM.Application.TaxManagement.Services.TaxCalculationService>();
 builder.Services.AddScoped<IQuotationPdfGenerationService, CRM.Application.Quotations.Services.QuotationPdfGenerationService>();
 builder.Services.AddScoped<IQuotationEmailService, CRM.Application.Quotations.Services.QuotationEmailService>();
 builder.Services.AddScoped<CRM.Application.Quotations.Services.IClientPortalOtpService, CRM.Application.Quotations.Services.ClientPortalOtpService>();
 builder.Services.AddScoped<IQuotationSendWorkflow, CRM.Application.Quotations.Services.QuotationSendWorkflow>();
 builder.Services.AddScoped<CRM.Application.Quotations.Services.QuotationReminderService>();
+
+// Company Details Services
+builder.Services.AddScoped<CRM.Application.CompanyDetails.Services.ICompanyDetailsService, CRM.Application.CompanyDetails.Services.CompanyDetailsService>();
+builder.Services.AddScoped<CRM.Application.CompanyDetails.Queries.Handlers.GetCompanyDetailsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyDetails.Commands.Handlers.UpdateCompanyDetailsCommandHandler>();
+// Company Identifiers (Spec-023)
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Queries.Handlers.GetIdentifierTypesQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Queries.Handlers.GetCountryIdentifierConfigurationsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Commands.Handlers.CreateIdentifierTypeCommandHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Commands.Handlers.UpdateIdentifierTypeCommandHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Commands.Handlers.ConfigureCountryIdentifierCommandHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Commands.Handlers.UpdateCountryIdentifierConfigurationCommandHandler>();
+// Company Identifiers Validators
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyIdentifiers.DTOs.CreateIdentifierTypeRequest>, CRM.Application.CompanyIdentifiers.Validators.CreateIdentifierTypeRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyIdentifiers.DTOs.UpdateIdentifierTypeRequest>, CRM.Application.CompanyIdentifiers.Validators.UpdateIdentifierTypeRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyIdentifiers.DTOs.ConfigureCountryIdentifierRequest>, CRM.Application.CompanyIdentifiers.Validators.ConfigureCountryIdentifierRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyIdentifiers.DTOs.UpdateCountryIdentifierConfigurationRequest>, CRM.Application.CompanyIdentifiers.Validators.UpdateCountryIdentifierConfigurationRequestValidator>();
+// Company Bank Details (Spec-023)
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Queries.Handlers.GetBankFieldTypesQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Queries.Handlers.GetCountryBankFieldConfigurationsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Commands.Handlers.CreateBankFieldTypeCommandHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Commands.Handlers.UpdateBankFieldTypeCommandHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Commands.Handlers.ConfigureCountryBankFieldCommandHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Commands.Handlers.UpdateCountryBankFieldConfigurationCommandHandler>();
+// Company Bank Details Validators
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyBankDetails.DTOs.CreateBankFieldTypeRequest>, CRM.Application.CompanyBankDetails.Validators.CreateBankFieldTypeRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyBankDetails.DTOs.UpdateBankFieldTypeRequest>, CRM.Application.CompanyBankDetails.Validators.UpdateBankFieldTypeRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyBankDetails.DTOs.ConfigureCountryBankFieldRequest>, CRM.Application.CompanyBankDetails.Validators.ConfigureCountryBankFieldRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyBankDetails.DTOs.UpdateCountryBankFieldConfigurationRequest>, CRM.Application.CompanyBankDetails.Validators.UpdateCountryBankFieldConfigurationRequestValidator>();
+// Company Identifiers - Value Management (Spec-023)
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Services.ICompanyIdentifierValidationService, CRM.Application.CompanyIdentifiers.Services.CompanyIdentifierValidationService>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Queries.Handlers.GetCompanyIdentifierValuesQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyIdentifiers.Commands.Handlers.SaveCompanyIdentifierValuesCommandHandler>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyIdentifiers.DTOs.SaveCompanyIdentifierValuesRequest>, CRM.Application.CompanyIdentifiers.Validators.SaveCompanyIdentifierValuesRequestValidator>();
+// Company Bank Details - Value Management (Spec-023)
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Services.ICompanyBankDetailsValidationService, CRM.Application.CompanyBankDetails.Services.CompanyBankDetailsValidationService>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Queries.Handlers.GetCompanyBankDetailsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.CompanyBankDetails.Commands.Handlers.SaveCompanyBankDetailsCommandHandler>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.CompanyBankDetails.DTOs.SaveCompanyBankDetailsRequest>, CRM.Application.CompanyBankDetails.Validators.SaveCompanyBankDetailsRequestValidator>();
+// Quotation Company Details Service (Spec-023)
+builder.Services.AddScoped<CRM.Application.Quotations.Services.QuotationCompanyDetailsService>();
 builder.Services.AddScoped<CRM.Application.Quotations.Commands.Handlers.CreateQuotationCommandHandler>();
 builder.Services.AddScoped<CRM.Application.Quotations.Commands.Handlers.UpdateQuotationCommandHandler>();
 builder.Services.AddScoped<CRM.Application.Quotations.Commands.Handlers.DeleteQuotationCommandHandler>();
@@ -136,6 +181,7 @@ builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.Quotation
 builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.Quotations.Queries.GetQuotationByAccessTokenQuery>, CRM.Application.Quotations.Validators.GetQuotationByAccessTokenQueryValidator>();
 // Quotation Template Handlers
 builder.Services.AddScoped<CRM.Application.QuotationTemplates.Commands.Handlers.CreateQuotationTemplateCommandHandler>();
+builder.Services.AddScoped<CRM.Application.QuotationTemplates.Commands.Handlers.UploadQuotationTemplateCommandHandler>();
 builder.Services.AddScoped<CRM.Application.QuotationTemplates.Commands.Handlers.UpdateQuotationTemplateCommandHandler>();
 builder.Services.AddScoped<CRM.Application.QuotationTemplates.Commands.Handlers.DeleteQuotationTemplateCommandHandler>();
 builder.Services.AddScoped<CRM.Application.QuotationTemplates.Commands.Handlers.RestoreQuotationTemplateCommandHandler>();
@@ -365,9 +411,115 @@ builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.Localizat
 builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.Localization.Dtos.UpdateExchangeRateRequest>, CRM.Application.Localization.Validators.UpdateExchangeRateRequestValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.Localization.Dtos.CreateLocalizationResourceRequest>, CRM.Application.Localization.Validators.CreateLocalizationResourceRequestValidator>();
 
+// User Management Command Handlers
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.CreateTeamCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.UpdateTeamCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.DeleteTeamCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.AddTeamMemberCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.RemoveTeamMemberCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.CreateUserGroupCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.UpdateUserGroupCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.AddUserGroupMemberCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.RemoveUserGroupMemberCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.AssignTaskCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.UpdateTaskStatusCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.DeleteTaskAssignmentCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.CreateMentionCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.MarkMentionReadCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.UpdateUserProfileCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.SetOutOfOfficeCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.UpdatePresenceCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.BulkInviteUsersCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.BulkUpdateUsersCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.BulkDeactivateUsersCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.CreateCustomRoleCommandHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Commands.Handlers.UpdateRolePermissionsCommandHandler>();
+// User Management Query Handlers
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetTeamsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetTeamByIdQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetTeamMembersQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetUserGroupsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetUserGroupByIdQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetUserTasksQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetActivityFeedQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetUserActivityQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetMentionsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetUnreadMentionsCountQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetUserProfileQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.ExportUsersQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetAvailablePermissionsQueryHandler>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Queries.Handlers.GetCustomRolesQueryHandler>();
+// User Management Validators
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.CreateTeamRequest>, CRM.Application.UserManagement.Validators.CreateTeamRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.UpdateTeamRequest>, CRM.Application.UserManagement.Validators.UpdateTeamRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.AddTeamMemberRequest>, CRM.Application.UserManagement.Validators.AddTeamMemberRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.CreateUserGroupRequest>, CRM.Application.UserManagement.Validators.CreateUserGroupRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.AssignTaskRequest>, CRM.Application.UserManagement.Validators.AssignTaskRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.UpdateTaskStatusRequest>, CRM.Application.UserManagement.Validators.UpdateTaskStatusRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.CreateMentionRequest>, CRM.Application.UserManagement.Validators.CreateMentionRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.UpdateUserProfileRequest>, CRM.Application.UserManagement.Validators.UpdateUserProfileRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.SetOutOfOfficeRequest>, CRM.Application.UserManagement.Validators.SetOutOfOfficeRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.BulkInviteUsersRequest>, CRM.Application.UserManagement.Validators.BulkInviteUsersRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.BulkUpdateUsersRequest>, CRM.Application.UserManagement.Validators.BulkUpdateUsersRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.UserManagement.Requests.CreateCustomRoleRequest>, CRM.Application.UserManagement.Validators.CreateCustomRoleRequestValidator>();
+// User Management Services
+builder.Services.AddScoped<CRM.Application.UserManagement.Services.IActivityService, CRM.Application.UserManagement.Services.ActivityService>();
+builder.Services.AddScoped<CRM.Application.UserManagement.Services.IPresenceService, CRM.Application.UserManagement.Services.PresenceService>();
+
+// Tax Management Command Handlers
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.CreateCountryCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.UpdateCountryCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.DeleteCountryCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.CreateTaxFrameworkCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.UpdateTaxFrameworkCommandHandler>();
+
+// Tax Management Query Handlers
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetAllCountriesQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetCountryByIdQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetAllTaxFrameworksQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetTaxFrameworkByIdQueryHandler>();
+
+// Tax Management - Jurisdiction Handlers
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.CreateJurisdictionCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.UpdateJurisdictionCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.DeleteJurisdictionCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetJurisdictionsByCountryQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetJurisdictionByIdQueryHandler>();
+
+// Tax Management - ProductServiceCategory Handlers
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.CreateProductServiceCategoryCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.UpdateProductServiceCategoryCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetAllProductServiceCategoriesQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetProductServiceCategoryByIdQueryHandler>();
+
+// Tax Management - TaxRate Handlers
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.CreateTaxRateCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.UpdateTaxRateCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Commands.Handlers.DeleteTaxRateCommandHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetAllTaxRatesQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetTaxRatesByJurisdictionQueryHandler>();
+
+// Tax Management - Tax Calculation Handlers
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.PreviewTaxCalculationQueryHandler>();
+builder.Services.AddScoped<CRM.Application.TaxManagement.Queries.Handlers.GetTaxCalculationLogQueryHandler>();
+
+// Tax Management Validators
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.CreateCountryRequest>, CRM.Application.TaxManagement.Validators.CreateCountryRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.UpdateCountryRequest>, CRM.Application.TaxManagement.Validators.UpdateCountryRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.CreateTaxFrameworkRequest>, CRM.Application.TaxManagement.Validators.CreateTaxFrameworkRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.UpdateTaxFrameworkRequest>, CRM.Application.TaxManagement.Validators.UpdateTaxFrameworkRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.CreateJurisdictionRequest>, CRM.Application.TaxManagement.Validators.CreateJurisdictionRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.UpdateJurisdictionRequest>, CRM.Application.TaxManagement.Validators.UpdateJurisdictionRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.CreateProductServiceCategoryRequest>, CRM.Application.TaxManagement.Validators.CreateProductServiceCategoryRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.UpdateProductServiceCategoryRequest>, CRM.Application.TaxManagement.Validators.UpdateProductServiceCategoryRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.CreateTaxRateRequest>, CRM.Application.TaxManagement.Validators.CreateTaxRateRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.UpdateTaxRateRequest>, CRM.Application.TaxManagement.Validators.UpdateTaxRateRequestValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<CRM.Application.TaxManagement.Requests.PreviewTaxCalculationRequest>, CRM.Application.TaxManagement.Validators.PreviewTaxCalculationRequestValidator>();
+
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-builder.Services.AddAutoMapper(typeof(CRM.Application.Mapping.RoleProfile).Assembly, typeof(CRM.Application.Mapping.LocalizationProfile).Assembly, typeof(CRM.Application.Admin.Mapping.AdminProfile).Assembly);
+builder.Services.AddAutoMapper(typeof(CRM.Application.Mapping.RoleProfile).Assembly, typeof(CRM.Application.Mapping.LocalizationProfile).Assembly, typeof(CRM.Application.Admin.Mapping.AdminProfile).Assembly, typeof(CRM.Application.Mapping.UserManagementProfile).Assembly, typeof(CRM.Application.TaxManagement.Mapping.TaxManagementProfile).Assembly, typeof(CRM.Application.Mapping.ProductProfile).Assembly, typeof(CRM.Application.Mapping.CompanyIdentifiersProfile).Assembly, typeof(CRM.Application.Mapping.CompanyBankDetailsProfile).Assembly);
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddScoped<CRM.Application.Products.Services.IProductPricingService, CRM.Application.Products.Services.ProductPricingService>();
 builder.Services.AddMemoryCache();
 
 var emailSection = builder.Configuration.GetSection("Email");
@@ -444,6 +596,8 @@ builder.Services.AddScoped<IResetTokenGenerator, ResetTokenGenerator>();
 builder.Services.AddScoped<CRM.Infrastructure.Admin.Encryption.IDataEncryptionService, CRM.Infrastructure.Admin.Encryption.AesDataEncryptionService>();
 builder.Services.AddScoped<CRM.Application.Common.Services.IDataEncryptionService, CRM.Api.Adapters.DataEncryptionServiceAdapter>();
 builder.Services.AddScoped<CRM.Infrastructure.Admin.FileStorage.IFileStorageService, CRM.Infrastructure.Admin.FileStorage.LocalFileStorageService>();
+// Register Application layer file storage service (adapter pattern)
+builder.Services.AddScoped<CRM.Application.Common.Services.IFileStorageService, CRM.Api.Adapters.FileStorageServiceAdapter>();
 builder.Services.AddScoped<CRM.Infrastructure.Admin.HtmlSanitization.IHtmlSanitizer, CRM.Infrastructure.Admin.HtmlSanitization.HtmlSanitizerService>();
 builder.Services.AddScoped<CRM.Application.Common.Services.IHtmlSanitizer, CRM.Api.Adapters.HtmlSanitizerAdapter>();
 builder.Services.AddScoped<CRM.Application.Admin.Services.IAuditLogService, CRM.Application.Admin.Services.AuditLogService>();
@@ -543,6 +697,9 @@ var audience = jwtSection.GetValue<string>("Audience") ?? "crm.api";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Map JWT standard claims (sub, email, etc.) to .NET claim types
+        options.MapInboundClaims = true;
+        
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -552,9 +709,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(2)
+            ClockSkew = TimeSpan.FromMinutes(2),
+            RoleClaimType = ClaimTypes.Role, // Use standard ASP.NET Core role claim type for [Authorize(Roles="...")]
+            NameClaimType = ClaimTypes.NameIdentifier // Use standard name claim type (maps "sub" claim)
         };
     });
+
+// Configure authorization to use role-based authorization
+builder.Services.AddAuthorization(options =>
+{
+    // Default policy requires authentication
+    options.FallbackPolicy = options.DefaultPolicy;
+});
 
 // Temporarily disabled during first boot; will re-enable after schema is applied
 // builder.Services.AddRateLimiter(options =>
@@ -712,6 +878,14 @@ _ = Task.Run(async () =>
 
 // CORS must be at the very beginning to handle preflight requests
 // This must come before any other middleware that might modify headers
+// Enable static file serving for uploads (logos, etc.)
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "wwwroot")),
+    RequestPath = ""
+});
+
 app.UseCors("app-to-api");
 
 // Debug middleware to log CORS-related requests
@@ -793,6 +967,7 @@ app.UseExceptionHandler(errorApp =>
 });
 
 app.MapControllers();
+app.MapHub<CRM.Api.Hubs.PresenceHub>("/hubs/presence");
 
 // Serve the Spec-005 contract file for reference
 app.MapGet("/contracts/user-profile-password.openapi.yaml", (IWebHostEnvironment env) =>

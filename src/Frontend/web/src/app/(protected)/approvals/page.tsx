@@ -6,6 +6,13 @@ import { ApprovalStatusBadge, ApprovalErrorBoundary, ApprovalListSkeleton } from
 import { formatCurrency, formatDateTime } from "@/utils/quotationFormatter";
 import Button from "@/components/tailadmin/ui/button/Button";
 import { ApprovalDecisionModal } from "@/components/approvals/ApprovalDecisionModal";
+import PageBreadcrumb from "@/components/tailadmin/common/PageBreadCrumb";
+import Input from "@/components/tailadmin/form/input/InputField";
+import Label from "@/components/tailadmin/form/Label";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/tailadmin/ui/table";
+import Pagination from "@/components/tailadmin/tables/Pagination";
+import Alert from "@/components/tailadmin/ui/alert/Alert";
+import Checkbox from "@/components/tailadmin/form/input/Checkbox";
 
 type TabType = "pending" | "approved" | "rejected" | "all";
 
@@ -132,18 +139,21 @@ export default function DiscountApprovalsDashboardPage() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
   return (
     <ApprovalErrorBoundary>
-      <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-        <div className="mb-6">
-          <h4 className="text-title-md2 font-bold text-black dark:text-white">Discount Approval Dashboard</h4>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Review and manage discount approval requests
-          </p>
-        </div>
+      <PageBreadcrumb pageTitle="Discount Approvals" />
+      
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Discount Approval Dashboard</h2>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">
+          Review and manage discount approval requests
+        </p>
+      </div>
 
       {/* Tabs */}
-      <div className="mb-6 border-b border-stroke dark:border-strokedark">
+      <div className="mb-6 border-b border-gray-200 dark:border-gray-800">
         <div className="flex gap-4">
           {(["pending", "approved", "rejected", "all"] as TabType[]).map((tab) => (
             <button
@@ -155,8 +165,8 @@ export default function DiscountApprovalsDashboardPage() {
               }}
               className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === tab
-                  ? "border-primary text-primary"
-                  : "border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                  ? "border-brand-500 text-brand-500"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white/90"
               }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -166,10 +176,10 @@ export default function DiscountApprovalsDashboardPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-5">
         <div>
-          <label className="mb-2.5 block text-sm text-black dark:text-white">Discount % Min</label>
-          <input
+          <Label>Discount % Min</Label>
+          <Input
             type="number"
             value={discountMin}
             onChange={(e) => {
@@ -177,12 +187,11 @@ export default function DiscountApprovalsDashboardPage() {
               setPageNumber(1);
             }}
             placeholder="0"
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
         <div>
-          <label className="mb-2.5 block text-sm text-black dark:text-white">Discount % Max</label>
-          <input
+          <Label>Discount % Max</Label>
+          <Input
             type="number"
             value={discountMax}
             onChange={(e) => {
@@ -190,42 +199,39 @@ export default function DiscountApprovalsDashboardPage() {
               setPageNumber(1);
             }}
             placeholder="100"
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
         <div>
-          <label className="mb-2.5 block text-sm text-black dark:text-white">Date From</label>
-          <input
+          <Label>Date From</Label>
+          <Input
             type="date"
             value={dateFrom}
             onChange={(e) => {
               setDateFrom(e.target.value);
               setPageNumber(1);
             }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
         <div>
-          <label className="mb-2.5 block text-sm text-black dark:text-white">Date To</label>
-          <input
+          <Label>Date To</Label>
+          <Input
             type="date"
             value={dateTo}
             onChange={(e) => {
               setDateTo(e.target.value);
               setPageNumber(1);
             }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
         <div>
-          <label className="mb-2.5 block text-sm text-black dark:text-white">Status (All tab)</label>
+          <Label>Status (All tab)</Label>
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value as ApprovalStatus | "");
               setPageNumber(1);
             }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
+            className="h-11 w-full appearance-none rounded-lg border border-gray-300 px-4 py-2.5 pr-11 text-sm shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
           >
             <option value="">All</option>
             <option value="Pending">Pending</option>
@@ -237,125 +243,106 @@ export default function DiscountApprovalsDashboardPage() {
 
       {/* Bulk Actions */}
       {activeTab === "pending" && selectedApprovals.size > 0 && (
-        <div className="mb-4 flex items-center justify-between rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-          <span className="text-sm text-blue-800 dark:text-blue-300">
-            {selectedApprovals.size} approval(s) selected
-          </span>
-          <Button size="sm" onClick={handleBulkApprove}>
-            Bulk Approve Selected
-          </Button>
+        <div className="mb-4 rounded-xl border border-blue-light-500 bg-blue-light-50 dark:border-blue-light-500/30 dark:bg-blue-light-500/15 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-blue-light-800 dark:text-blue-light-300">
+              {selectedApprovals.size} approval(s) selected
+            </span>
+            <Button size="sm" onClick={handleBulkApprove}>
+              Bulk Approve Selected
+            </Button>
+          </div>
         </div>
       )}
 
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <Alert className="mb-4" variant="error" title="Error" message={error} />}
 
       {/* Table */}
       {loading ? (
         <ApprovalListSkeleton />
       ) : approvals.length === 0 ? (
-        <div className="py-8 text-center text-gray-500">No approvals found.</div>
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-8 text-center">
+          <div className="text-gray-500 dark:text-gray-400">No approvals found.</div>
+        </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full table-auto">
-            <thead>
-              <tr className="bg-gray-2 text-left dark:bg-meta-4">
-                {activeTab === "pending" && (
-                  <th className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedApprovals.size === approvals.length && approvals.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-gray-300"
-                    />
-                  </th>
-                )}
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Quotation #</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Client</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Discount %</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Sales Rep</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Level</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Status</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Requested</th>
-                <th className="px-4 py-3 font-medium text-black dark:text-white">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approvals.map((approval) => (
-                <tr key={approval.approvalId} className="border-b border-[#eee] dark:border-strokedark">
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <div className="max-w-full overflow-x-auto">
+            <Table>
+              <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                <TableRow>
                   {activeTab === "pending" && (
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedApprovals.has(approval.approvalId)}
-                        onChange={() => toggleSelection(approval.approvalId)}
-                        className="rounded border-gray-300"
+                    <TableCell isHeader className="px-5 py-3">
+                      <Checkbox
+                        checked={selectedApprovals.size === approvals.length && approvals.length > 0}
+                        onChange={toggleSelectAll}
                       />
-                    </td>
+                    </TableCell>
                   )}
-                  <td className="px-4 py-3 text-black dark:text-white">{approval.quotationNumber}</td>
-                  <td className="px-4 py-3 text-black dark:text-white">{approval.clientName}</td>
-                  <td className="px-4 py-3 text-black dark:text-white font-medium">
-                    {approval.currentDiscountPercentage}%
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{approval.requestedByUserName}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{approval.approvalLevel}</td>
-                  <td className="px-4 py-3">
-                    <ApprovalStatusBadge status={approval.status} />
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                    {formatDateTime(approval.requestDate)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {approval.status === "Pending" && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApprove(approval)}
-                          className="rounded bg-green-500 px-3 py-1 text-xs text-white hover:bg-opacity-90"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleReject(approval)}
-                          className="rounded bg-red-500 px-3 py-1 text-xs text-white hover:bg-opacity-90"
-                        >
-                          Reject
-                        </button>
-                      </div>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Quotation #</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Client</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Discount %</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Sales Rep</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Level</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Status</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Requested</TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Actions</TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                {approvals.map((approval) => (
+                  <TableRow key={approval.approvalId}>
+                    {activeTab === "pending" && (
+                      <TableCell className="px-5 py-4">
+                        <Checkbox
+                          checked={selectedApprovals.has(approval.approvalId)}
+                          onChange={() => toggleSelection(approval.approvalId)}
+                        />
+                      </TableCell>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <TableCell className="px-5 py-4 text-gray-800 text-theme-sm dark:text-white/90">{approval.quotationNumber}</TableCell>
+                    <TableCell className="px-5 py-4 text-gray-800 text-theme-sm dark:text-white/90">{approval.clientName}</TableCell>
+                    <TableCell className="px-5 py-4 text-gray-800 text-theme-sm dark:text-white/90 font-medium">
+                      {approval.currentDiscountPercentage}%
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">{approval.requestedByUserName}</TableCell>
+                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">{approval.approvalLevel}</TableCell>
+                    <TableCell className="px-5 py-4">
+                      <ApprovalStatusBadge status={approval.status} />
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
+                      {formatDateTime(approval.requestDate)}
+                    </TableCell>
+                    <TableCell className="px-5 py-4">
+                      {approval.status === "Pending" && (
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="text-xs px-2 py-1 text-success-600 hover:text-success-700" onClick={() => handleApprove(approval)}>
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-xs px-2 py-1 text-error-500 hover:text-error-600" onClick={() => handleReject(approval)}>
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 
       {/* Pagination */}
       {total > 0 && (
         <div className="mt-4 flex items-center justify-between">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
             Showing {(pageNumber - 1) * pageSize + 1} to {Math.min(pageNumber * pageSize, total)} of {total} approvals
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPageNumber(p => Math.max(1, p - 1))}
-              disabled={pageNumber === 1}
-              className="rounded border border-stroke px-3 py-1 text-sm disabled:opacity-50 dark:border-strokedark"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPageNumber(p => p + 1)}
-              disabled={pageNumber * pageSize >= total}
-              className="rounded border border-stroke px-3 py-1 text-sm disabled:opacity-50 dark:border-strokedark"
-            >
-              Next
-            </button>
-          </div>
+          <Pagination 
+            currentPage={pageNumber} 
+            totalPages={totalPages} 
+            onPageChange={(p) => setPageNumber(p)} 
+          />
         </div>
       )}
 
@@ -373,7 +360,6 @@ export default function DiscountApprovalsDashboardPage() {
           onSubmit={handleDecisionSubmit}
         />
       )}
-      </div>
     </ApprovalErrorBoundary>
   );
 }

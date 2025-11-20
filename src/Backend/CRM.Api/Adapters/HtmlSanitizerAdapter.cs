@@ -3,7 +3,7 @@ using CRM.Infrastructure.Admin.HtmlSanitization;
 
 namespace CRM.Api.Adapters;
 
-public class HtmlSanitizerAdapter : IHtmlSanitizer
+public class HtmlSanitizerAdapter : CRM.Application.Common.Services.IHtmlSanitizer
 {
     private readonly Infrastructure.Admin.HtmlSanitization.IHtmlSanitizer _infrastructureService;
 

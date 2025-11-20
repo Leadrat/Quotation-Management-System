@@ -30,7 +30,15 @@ export const useAuth = create<AuthState>((set, get) => ({
       set({ accessToken: res.accessToken, user: res.user, loggingIn: false });
       return true;
     } catch (e: any) {
-      set({ error: e.message || "Login failed", loggingIn: false });
+      let errorMessage = "Login failed";
+      if (e.status === 401) {
+        errorMessage = "Invalid email or password. Please check your credentials and try again.";
+      } else if (e.status === 403) {
+        errorMessage = "Your account is not active. Please contact support.";
+      } else if (e.message && e.message !== `HTTP ${e.status}`) {
+        errorMessage = e.message;
+      }
+      set({ error: errorMessage, loggingIn: false });
       return false;
     }
   },

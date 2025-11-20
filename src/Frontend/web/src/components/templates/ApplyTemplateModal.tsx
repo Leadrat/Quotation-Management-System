@@ -104,7 +104,18 @@ export default function ApplyTemplateModal({ clientId, onSelect, onClose }: Appl
                         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{template.description}</p>
                       )}
                       <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                        <span className="text-black dark:text-white">{template.lineItems.length} items</span>
+                        {template.isFileBased ? (
+                          <>
+                            <span className="rounded bg-blue-100 px-2 py-1 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                              {template.templateType || "File Template"}
+                            </span>
+                            {template.fileName && (
+                              <span className="text-black dark:text-white">📄 {template.fileName}</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-black dark:text-white">{template.lineItems.length} items</span>
+                        )}
                         <span className="text-black dark:text-white">Used {template.usageCount} times</span>
                         {template.isApproved && (
                           <span className="rounded bg-green-100 px-2 py-1 text-green-800 dark:bg-green-900 dark:text-green-300">

@@ -39,8 +39,7 @@ namespace CRM.Tests.Notifications
         {
             // Arrange
             var db = NewDb();
-            var mapper = NewMapper();
-            var handler = new MarkNotificationsReadCommandHandler(db, mapper, NullLogger<MarkNotificationsReadCommandHandler>.Instance);
+            var handler = new MarkNotificationsReadCommandHandler(db, NullLogger<MarkNotificationsReadCommandHandler>.Instance);
 
             var userId = Guid.NewGuid();
             var notification1 = new Notification
@@ -75,7 +74,7 @@ namespace CRM.Tests.Notifications
             var result = await handler.Handle(command);
 
             // Assert
-            Assert.True(result.Success);
+            Assert.True(result > 0);
             var updated1 = await db.Notifications.FindAsync(notification1.NotificationId);
             var updated2 = await db.Notifications.FindAsync(notification2.NotificationId);
             Assert.True(updated1?.IsRead);
@@ -87,8 +86,7 @@ namespace CRM.Tests.Notifications
         {
             // Arrange
             var db = NewDb();
-            var mapper = NewMapper();
-            var handler = new MarkNotificationsReadCommandHandler(db, mapper, NullLogger<MarkNotificationsReadCommandHandler>.Instance);
+            var handler = new MarkNotificationsReadCommandHandler(db, NullLogger<MarkNotificationsReadCommandHandler>.Instance);
 
             var userId = Guid.NewGuid();
             var notification1 = new Notification
@@ -123,7 +121,7 @@ namespace CRM.Tests.Notifications
             var result = await handler.Handle(command);
 
             // Assert
-            Assert.True(result.Success);
+            Assert.True(result > 0);
             var allRead = await db.Notifications
                 .Where(n => n.RecipientUserId == userId)
                 .AllAsync(n => n.IsRead);

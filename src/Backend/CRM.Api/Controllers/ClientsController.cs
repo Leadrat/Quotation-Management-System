@@ -34,44 +34,79 @@ namespace CRM.Api.Controllers
         [Authorize(Roles = "SalesRep,Admin")]
         public async Task<IActionResult> Create([FromBody] CreateClientRequest body)
         {
-            var validator = new CreateClientRequestValidator();
-            var result = validator.Validate(body);
-            if (!result.IsValid)
+            try
             {
-                return BadRequest(new { success = false, error = "Validation failed", errors = result.ToDictionary() });
+                var validator = new CreateClientRequestValidator();
+                var result = validator.Validate(body);
+                if (!result.IsValid)
+                {
+                    return BadRequest(new { success = false, error = "Validation failed", errors = result.ToDictionary() });
+                }
+
+                // Try multiple claim types to find user ID
+                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? User.FindFirstValue("sub")
+                    ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)
+                    ?? User.FindFirstValue("userId");
+
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+                {
+                    return Unauthorized(new { success = false, error = "Invalid user token - user ID not found" });
+                }
+
+                await _audit.LogAsync("client_create_attempt", new { userId, body.Email });
+
+                var cmd = new CreateClientCommand
+                {
+                    CompanyName = body.CompanyName,
+                    ContactName = body.ContactName,
+                    Email = body.Email,
+                    Mobile = body.Mobile,
+                    PhoneCode = body.PhoneCode,
+                    Gstin = body.Gstin,
+                    StateCode = body.StateCode,
+                    Address = body.Address,
+                    City = body.City,
+                    State = body.State,
+                    PinCode = body.PinCode,
+                    CreatedByUserId = userId
+                };
+
+                var handler = new CreateClientCommandHandler(_db, _mapper);
+                var created = await handler.Handle(cmd);
+
+                await _audit.LogAsync("client_create_success", new { userId, created.ClientId });
+                return StatusCode(201, new { success = true, message = "Client created successfully", data = created });
             }
-
-            var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;
-            if (!Guid.TryParse(sub, out var userId)) return Unauthorized();
-
-            await _audit.LogAsync("client_create_attempt", new { userId, body.Email });
-
-            var cmd = new CreateClientCommand
+            catch (CRM.Application.Clients.Exceptions.DuplicateEmailException ex)
             {
-                CompanyName = body.CompanyName,
-                ContactName = body.ContactName,
-                Email = body.Email,
-                Mobile = body.Mobile,
-                PhoneCode = body.PhoneCode,
-                Gstin = body.Gstin,
-                StateCode = body.StateCode,
-                Address = body.Address,
-                City = body.City,
-                State = body.State,
-                PinCode = body.PinCode,
-                CreatedByUserId = userId
-            };
-
-            var handler = new CreateClientCommandHandler(_db, _mapper);
-            var created = await handler.Handle(cmd);
-
-            await _audit.LogAsync("client_create_success", new { userId, created.ClientId });
-            return StatusCode(201, new { success = true, message = "Client created successfully", data = created });
+                return Conflict(new { success = false, error = ex.Message });
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") || ex.Message.Contains("constraint violation") || ex.Message.Contains("Database error"))
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                // Handle database constraint violations
+                var innerException = dbEx.InnerException?.Message ?? dbEx.Message;
+                if (innerException.Contains("foreign key") || innerException.Contains("FK_") || innerException.Contains("violates foreign key constraint"))
+                {
+                    return BadRequest(new { success = false, error = "Invalid user reference. Please ensure you are properly authenticated.", details = innerException });
+                }
+                return StatusCode(500, new { success = false, error = "Database error occurred while creating client", message = innerException });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while creating client", message = ex.Message, stackTrace = System.Diagnostics.Debugger.IsAttached ? ex.StackTrace : null });
+            }
         }
 
         [HttpGet]
         [Authorize(Roles = "SalesRep,Admin")]
         public async Task<IActionResult> List([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] Guid? userId = null)
+        {
+            try
         {
             var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;
             if (!Guid.TryParse(sub, out var requestorId)) return Unauthorized();
@@ -87,6 +122,11 @@ namespace CRM.Api.Controllers
                 RequestorRole = role
             });
             return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving clients", message = ex.Message });
+            }
         }
 
         [HttpGet("{clientId}")]

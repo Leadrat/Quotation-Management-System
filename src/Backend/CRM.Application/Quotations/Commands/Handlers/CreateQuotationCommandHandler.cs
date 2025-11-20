@@ -7,6 +7,9 @@ using AutoMapper;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Quotations.Dtos;
 using CRM.Application.Quotations.Services;
+using CRM.Application.TaxManagement.Services;
+using CRM.Application.TaxManagement.Dtos;
+using CRM.Application.CompanyDetails.Services;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using CRM.Domain.Events;
@@ -14,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CRM.Shared.Config;
+using System.Text.Json;
 
 namespace CRM.Application.Quotations.Commands.Handlers
 {
@@ -23,26 +27,35 @@ namespace CRM.Application.Quotations.Commands.Handlers
         private readonly IMapper _mapper;
         private readonly QuotationNumberGenerator _numberGenerator;
         private readonly QuotationTotalsCalculator _totalsCalculator;
-        private readonly TaxCalculationService _taxCalculator;
+        private readonly Quotations.Services.TaxCalculationService _taxCalculator; // Legacy service for backward compatibility
+        private readonly ITaxCalculationService _newTaxCalculator; // New framework-based service
         private readonly QuotationSettings _settings;
         private readonly ILogger<CreateQuotationCommandHandler> _logger;
+        private readonly ICompanyDetailsService _companyDetailsService;
+        private readonly Quotations.Services.QuotationCompanyDetailsService _quotationCompanyDetailsService;
 
         public CreateQuotationCommandHandler(
             IAppDbContext db,
             IMapper mapper,
             QuotationNumberGenerator numberGenerator,
             QuotationTotalsCalculator totalsCalculator,
-            TaxCalculationService taxCalculator,
+            Quotations.Services.TaxCalculationService taxCalculator,
+            ITaxCalculationService newTaxCalculator,
             IOptions<QuotationSettings> settings,
-            ILogger<CreateQuotationCommandHandler> logger)
+            ILogger<CreateQuotationCommandHandler> logger,
+            ICompanyDetailsService companyDetailsService,
+            Quotations.Services.QuotationCompanyDetailsService quotationCompanyDetailsService)
         {
             _db = db;
             _mapper = mapper;
             _numberGenerator = numberGenerator;
             _totalsCalculator = totalsCalculator;
             _taxCalculator = taxCalculator;
+            _newTaxCalculator = newTaxCalculator;
             _settings = settings.Value;
             _logger = logger;
+            _companyDetailsService = companyDetailsService;
+            _quotationCompanyDetailsService = quotationCompanyDetailsService;
         }
 
         public async Task<QuotationDto> Handle(CreateQuotationCommand request)
@@ -125,11 +138,43 @@ namespace CRM.Application.Quotations.Commands.Handlers
             // Calculate totals
             var totals = _totalsCalculator.Calculate(null!, lineItems, request.Request.DiscountPercentage);
 
-            // Calculate tax (handle null StateCode)
-            var taxResult = _taxCalculator.CalculateTax(
-                totals.SubTotal,
-                totals.DiscountAmount,
-                client.StateCode ?? null);
+            // Calculate tax using new framework-based service
+            TaxCalculationResultDto? newTaxResult = null;
+            try
+            {
+                var lineItemTaxInputs = lineItems.Select(li => new LineItemTaxInput
+                {
+                    LineItemId = li.LineItemId,
+                    // Use TaxCategoryId if ProductServiceCategoryId is not set (for backward compatibility)
+                    ProductServiceCategoryId = li.ProductServiceCategoryId ?? li.TaxCategoryId,
+                    Amount = li.Amount
+                }).ToList();
+
+                newTaxResult = await _newTaxCalculator.CalculateTaxAsync(
+                    request.Request.ClientId,
+                    lineItemTaxInputs,
+                    totals.SubTotal,
+                    totals.DiscountAmount,
+                    quotationDate);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to calculate tax using new service, falling back to legacy service");
+            }
+
+            // Fallback to legacy tax calculation if new service fails
+            var taxResult = newTaxResult != null
+                ? new TaxCalculationResult
+                {
+                    TotalTax = newTaxResult.TotalTax,
+                    CgstAmount = newTaxResult.TaxBreakdown.FirstOrDefault(t => t.Component == "CGST")?.Amount ?? 0,
+                    SgstAmount = newTaxResult.TaxBreakdown.FirstOrDefault(t => t.Component == "SGST")?.Amount ?? 0,
+                    IgstAmount = newTaxResult.TaxBreakdown.FirstOrDefault(t => t.Component == "IGST")?.Amount ?? 0
+                }
+                : _taxCalculator.CalculateTax(
+                    totals.SubTotal,
+                    totals.DiscountAmount,
+                    client.StateCode ?? null);
 
             // Create quotation entity
             var quotation = new Quotation
@@ -154,6 +199,37 @@ namespace CRM.Application.Quotations.Commands.Handlers
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
+            // Set new tax framework fields if new tax calculation was used
+            if (newTaxResult != null)
+            {
+                quotation.TaxCountryId = newTaxResult.CountryId;
+                quotation.TaxJurisdictionId = newTaxResult.JurisdictionId;
+                quotation.TaxFrameworkId = newTaxResult.TaxFrameworkId;
+                quotation.TaxBreakdown = JsonSerializer.Serialize(newTaxResult.TaxBreakdown);
+
+                // Log tax calculation
+                var taxLog = new TaxCalculationLog
+                {
+                    LogId = Guid.NewGuid(),
+                    QuotationId = quotation.QuotationId,
+                    ActionType = TaxCalculationActionType.Calculation,
+                    CountryId = newTaxResult.CountryId,
+                    JurisdictionId = newTaxResult.JurisdictionId,
+                    CalculationDetails = JsonSerializer.Serialize(new
+                    {
+                        Subtotal = newTaxResult.Subtotal,
+                        DiscountAmount = newTaxResult.DiscountAmount,
+                        TaxableAmount = newTaxResult.TaxableAmount,
+                        TotalTax = newTaxResult.TotalTax,
+                        TaxBreakdown = newTaxResult.TaxBreakdown,
+                        LineItemBreakdown = newTaxResult.LineItemBreakdown
+                    }),
+                    ChangedByUserId = request.CreatedByUserId,
+                    ChangedAt = DateTimeOffset.UtcNow
+                };
+                _db.TaxCalculationLogs.Add(taxLog);
+            }
+
             // Set quotation ID on line items
             foreach (var item in lineItems)
             {
@@ -161,6 +237,35 @@ namespace CRM.Application.Quotations.Commands.Handlers
             }
 
             quotation.LineItems = lineItems;
+
+            // Store company details snapshot for historical accuracy (country-specific)
+            try
+            {
+                var clientCountryId = client.CountryId ?? throw new InvalidOperationException("Client must have a country set.");
+                var companyDetails = await _quotationCompanyDetailsService.GetCompanyDetailsForQuotationAsync(clientCountryId);
+                if (companyDetails != null)
+                {
+                    quotation.CompanyDetailsSnapshot = JsonSerializer.Serialize(companyDetails);
+                    _logger.LogInformation("Stored country-specific company details snapshot for quotation {QuotationId}, client country: {CountryId}", 
+                        quotation.QuotationId, clientCountryId);
+                }
+                else
+                {
+                    _logger.LogWarning("Company details not configured for country {CountryId}. Quotation {QuotationId} created without company details snapshot.", 
+                        clientCountryId, quotation.QuotationId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get country-specific company details for quotation {QuotationId}. Falling back to general company details.", 
+                    quotation.QuotationId);
+                // Fallback to general company details
+                var companyDetails = await _companyDetailsService.GetCompanyDetailsAsync();
+                if (companyDetails != null)
+                {
+                    quotation.CompanyDetailsSnapshot = JsonSerializer.Serialize(companyDetails);
+                }
+            }
 
             // Save to database
             _db.Quotations.Add(quotation);
@@ -206,6 +311,15 @@ namespace CRM.Application.Quotations.Commands.Handlers
                     }
                 }
                 
+                // Check for missing table error (PostgreSQL error code 42P01)
+                if (fullMessage.Contains("42P01") && 
+                    (fullMessage.Contains("does not exist") || 
+                     (fullMessage.Contains("relation") && fullMessage.Contains("not exist"))))
+                {
+                    _logger.LogError(dbEx, "Database table missing error. Error: {Error}", fullMessage);
+                    throw new InvalidOperationException("Database table missing. Please contact administrator to run migrations.", dbEx);
+                }
+                
                 throw new InvalidOperationException($"Failed to save quotation: {innerMessage}", dbEx);
             }
 
@@ -236,33 +350,30 @@ namespace CRM.Application.Quotations.Commands.Handlers
             
             return result;
             }
-            catch (Exception ex)
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
             {
                 stopwatch.Stop();
                 
-                // Check if this is a missing table error (check both outer and inner exceptions)
-                var exceptionMessage = ex.Message;
-                var innerException = ex.InnerException;
-                while (innerException != null)
+                // This should already be handled by the inner catch block
+                // Re-throw to preserve the specific error message
+                throw;
+            }
+            catch (InvalidOperationException ioEx)
+            {
+                stopwatch.Stop();
+                // Check if this is the "table does not exist" error we're looking for
+                if (ioEx.Message.Contains("table does not exist") || ioEx.Message.Contains("run database migrations"))
                 {
-                    exceptionMessage += " | " + innerException.Message;
-                    innerException = innerException.InnerException;
-                }
-
-                if (exceptionMessage.Contains("42P01") || 
-                    exceptionMessage.Contains("does not exist") || 
-                    (exceptionMessage.Contains("relation") && exceptionMessage.Contains("not exist")) ||
-                    exceptionMessage.Contains("Invalid object name") ||
-                    exceptionMessage.Contains("could not be found") ||
-                    exceptionMessage.Contains("Quotations"))
-                {
-                    _logger.LogError(ex, "Quotations table does not exist, cannot create quotation for client {ClientId}", 
+                    _logger.LogError(ioEx, "Database table missing error for quotation creation. Client: {ClientId}", 
                         request.Request.ClientId);
-                    throw new InvalidOperationException("Quotations table does not exist. Please run database migrations first.");
                 }
-
-                _logger.LogError(ex, "Failed to create quotation for client {ClientId} after {ElapsedMs}ms", 
-                    request.Request.ClientId, stopwatch.ElapsedMilliseconds);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                _logger.LogError(ex, "Failed to create quotation for client {ClientId} after {ElapsedMs}ms. Error: {Error}", 
+                    request.Request.ClientId, stopwatch.ElapsedMilliseconds, ex.Message);
                 throw;
             }
         }

@@ -137,9 +137,16 @@ namespace CRM.Api.Controllers
         [ProducesResponseType(typeof(List<AdjustmentDto>), 200)]
         public async Task<IActionResult> GetAdjustmentsByQuotation(Guid quotationId)
         {
-            var query = new GetAdjustmentsByQuotationQuery { QuotationId = quotationId };
-            var result = await _getByQuotationHandler.Handle(query);
-            return Ok(result);
+            try
+            {
+                var query = new GetAdjustmentsByQuotationQuery { QuotationId = quotationId };
+                var result = await _getByQuotationHandler.Handle(query);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
         }
 
         [HttpGet("pending")]

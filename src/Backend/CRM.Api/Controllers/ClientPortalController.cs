@@ -244,7 +244,7 @@ namespace CRM.Api.Controllers
             try
             {
                 var quotation = await GetQuotationEntityAsync(quotationId, accessToken);
-                var pdfBytes = _pdfService.GenerateQuotationPdf(quotation);
+                var pdfBytes = await _pdfService.GenerateQuotationPdfAsync(quotation);
                 var fileName = $"Quotation-{quotation.QuotationNumber}.pdf";
                 return File(pdfBytes, "application/pdf", fileName);
             }

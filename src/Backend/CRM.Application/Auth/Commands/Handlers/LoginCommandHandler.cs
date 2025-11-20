@@ -30,22 +30,33 @@ public class LoginCommandHandler
             throw new InvalidCredentialsException();
         }
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && u.DeletedAt == null);
+        var user = await _db.Users
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Email == email && u.DeletedAt == null);
+        
         if (user == null)
         {
             throw new InvalidCredentialsException();
         }
+        
         if (!user.IsActive)
         {
             throw new UserNotActiveException();
         }
 
+        // Verify password
         var ok = PasswordHelper.VerifyPassword(cmd.Password, user.PasswordHash);
         if (!ok)
         {
             user.LoginAttempts += 1; // monitor only
             await _db.SaveChangesAsync();
             throw new InvalidCredentialsException();
+        }
+        
+        // Ensure Role is loaded - if not, load it explicitly
+        if (user.Role == null && user.RoleId != Guid.Empty)
+        {
+            user.Role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleId == user.RoleId);
         }
 
         user.LoginAttempts = 0;

@@ -21,9 +21,15 @@ export function useIntegrationKeys() {
     setError(null);
     try {
       const response = await AdminApi.getIntegrationKeys();
-      setKeys(response.data);
+      setKeys(Array.isArray(response.data) ? response.data : []);
     } catch (err: any) {
-      setError(err.message || "Failed to load integration keys");
+      const errorMsg = err.message || "Failed to load integration keys";
+      setError(errorMsg);
+      setKeys([]);
+      // Don't show error for 409 - may be conflict but still show empty state
+      if (err.message?.includes("409")) {
+        setError("There was a conflict loading integration keys. Please refresh.");
+      }
     } finally {
       setLoading(false);
     }

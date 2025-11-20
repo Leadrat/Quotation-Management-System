@@ -22,8 +22,15 @@ namespace CRM.Application.Clients.Commands.Handlers
 
         public async Task<ClientDto> Handle(CreateClientCommand cmd)
         {
+            // Validate that the user exists
+            var userExists = await _db.Users.AnyAsync(u => u.UserId == cmd.CreatedByUserId && u.DeletedAt == null);
+            if (!userExists)
+            {
+                throw new InvalidOperationException($"User with ID {cmd.CreatedByUserId} does not exist in the database.");
+            }
+
             var emailLower = (cmd.Email ?? string.Empty).Trim().ToLowerInvariant();
-            var exists = await _db.Clients.AnyAsync(c => c.DeletedAt == null && c.Email.ToLower() == emailLower);
+            var exists = await _db.Clients.AnyAsync(c => c.DeletedAt == null && c.Email != null && c.Email.ToLower() == emailLower);
             if (exists)
             {
                 throw new DuplicateEmailException(cmd.Email);
@@ -50,9 +57,40 @@ namespace CRM.Application.Clients.Commands.Handlers
             };
 
             _db.Clients.Add(entity);
+            
+            try
+            {
             await _db.SaveChangesAsync();
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                var innerException = dbEx.InnerException?.Message ?? dbEx.Message;
+                // Check for foreign key constraint violation
+                if (innerException.Contains("foreign key") || innerException.Contains("FK_") || 
+                    innerException.Contains("violates foreign key constraint"))
+                {
+                    throw new InvalidOperationException($"Database constraint violation: The user with ID {cmd.CreatedByUserId} may not exist or the foreign key constraint is misconfigured. Details: {innerException}", dbEx);
+                }
+                // Check for unique constraint violation (email)
+                if (innerException.Contains("unique") || innerException.Contains("duplicate"))
+                {
+                    throw new DuplicateEmailException(cmd.Email);
+                }
+                // Re-throw with more context
+                throw new InvalidOperationException($"Database error while saving client: {innerException}", dbEx);
+            }
 
-            return _mapper.Map<ClientDto>(entity);
+            // Reload entity with CreatedByUser navigation property for mapping
+            var entityWithUser = await _db.Clients
+                .Include(c => c.CreatedByUser)
+                .FirstOrDefaultAsync(c => c.ClientId == entity.ClientId);
+
+            if (entityWithUser == null)
+            {
+                throw new InvalidOperationException("Failed to retrieve created client");
+            }
+
+            return _mapper.Map<ClientDto>(entityWithUser);
         }
     }
 }

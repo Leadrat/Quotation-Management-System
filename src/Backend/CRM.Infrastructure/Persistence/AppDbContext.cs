@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using CRM.Domain.Entities;
 using CRM.Domain.Admin;
+using CRM.Domain.UserManagement;
 using CRM.Application.Common.Persistence;
 
 namespace CRM.Infrastructure.Persistence;
@@ -55,6 +56,38 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<CustomBranding> CustomBranding => Set<CustomBranding>();
     public DbSet<DataRetentionPolicy> DataRetentionPolicies => Set<DataRetentionPolicy>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+
+    // Company Details
+    public DbSet<CompanyDetails> CompanyDetails => Set<CompanyDetails>();
+    public DbSet<BankDetails> BankDetails => Set<BankDetails>();
+    
+    // Country-Specific Identifiers & Bank Details
+    public DbSet<IdentifierType> IdentifierTypes => Set<IdentifierType>();
+    public DbSet<CountryIdentifierConfiguration> CountryIdentifierConfigurations => Set<CountryIdentifierConfiguration>();
+    public DbSet<BankFieldType> BankFieldTypes => Set<BankFieldType>();
+    public DbSet<CountryBankFieldConfiguration> CountryBankFieldConfigurations => Set<CountryBankFieldConfiguration>();
+
+    // User Management
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<UserGroup> UserGroups => Set<UserGroup>();
+    public DbSet<UserGroupMember> UserGroupMembers => Set<UserGroupMember>();
+    public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
+    public DbSet<UserActivity> UserActivities => Set<UserActivity>();
+    public DbSet<Mention> Mentions => Set<Mention>();
+
+    // Tax Management
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<Jurisdiction> Jurisdictions => Set<Jurisdiction>();
+    public DbSet<TaxFramework> TaxFrameworks => Set<TaxFramework>();
+    public DbSet<TaxRate> TaxRates => Set<TaxRate>();
+    public DbSet<ProductServiceCategory> ProductServiceCategories => Set<ProductServiceCategory>();
+    public DbSet<TaxCalculationLog> TaxCalculationLogs => Set<TaxCalculationLog>();
+
+    // Product Catalog
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<ProductPriceHistory> ProductPriceHistory => Set<ProductPriceHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
