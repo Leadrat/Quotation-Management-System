@@ -42,13 +42,13 @@ export default function EditProductPage() {
         const parsedProduct: any = {
           ...productData,
           billingCycleMultipliers: productData.billingCycleMultipliers
-            ? JSON.parse(productData.billingCycleMultipliers)
+            ? JSON.parse(productData.billingCycleMultipliers as string)
             : undefined,
           addOnPricing: productData.addOnPricing
-            ? JSON.parse(productData.addOnPricing)
+            ? JSON.parse(productData.addOnPricing as unknown as string)
             : undefined,
           customDevelopmentPricing: productData.customDevelopmentPricing
-            ? JSON.parse(productData.customDevelopmentPricing)
+            ? JSON.parse(productData.customDevelopmentPricing as unknown as string)
             : undefined,
         };
         setProduct(parsedProduct);
@@ -114,12 +114,12 @@ export default function EditProductPage() {
       <PageBreadcrumb pageTitle="Edit Product" />
       <ComponentCard
         title={`Edit Product: ${product?.productName || ""}`}
-        action={
+      >
+        <div className="flex justify-end mb-4">
           <Button variant="outline" onClick={handleDelete} disabled={deleting}>
             {deleting ? "Deleting..." : "Delete"}
           </Button>
-        }
-      >
+        </div>
         {error && (
           <div className="mb-4 rounded border border-red-500 bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-400">
             {error}
