@@ -1,3 +1,4 @@
+using CRM.Domain.Entities;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -38,7 +39,9 @@ namespace CRM.Application.Notifications.Commands.Handlers
 
             foreach (var notification in notifications)
             {
-                notification.Unarchive();
+                notification.IsArchived = false;
+                notification.ArchivedAt = null;
+                notification.UpdatedAt = DateTimeOffset.UtcNow;
                 count++;
                 _logger.LogInformation("Notification {NotificationId} unarchived by user {UserId}",
                     notification.NotificationId, command.RequestedByUserId);

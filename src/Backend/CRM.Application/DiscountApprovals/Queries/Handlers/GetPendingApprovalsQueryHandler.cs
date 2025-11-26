@@ -60,19 +60,23 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
             // Filter by approver based on role
             if (query.RequestorRole.Equals("Manager", StringComparison.OrdinalIgnoreCase))
             {
-                // Manager sees only manager-level approvals assigned to them
+                // Manager sees ALL manager-level approvals (not escalated to admin)
+                // This allows any manager to approve any Manager-level request
+                _logger.LogInformation("Filtering approvals for Manager: ApprovalLevel=Manager, EscalatedToAdmin=false");
                 baseQuery = baseQuery.Where(a => 
                     a.ApprovalLevel == ApprovalLevel.Manager && 
-                    (a.ApproverUserId == query.RequestorUserId || a.ApproverUserId == null));
+                    !a.EscalatedToAdmin);
             }
             else if (query.RequestorRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
             {
                 // Admin sees all approvals
+                _logger.LogInformation("Filtering approvals for Admin: showing all approvals");
                 // No additional filter
             }
             else
             {
                 // SalesRep sees only their own requests
+                _logger.LogInformation("Filtering approvals for SalesRep: RequestedByUserId={UserId}", query.RequestorUserId);
                 baseQuery = baseQuery.Where(a => a.RequestedByUserId == query.RequestorUserId);
             }
 
@@ -117,6 +121,8 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
 
             // Get total count
             var totalCount = await baseQuery.CountAsync();
+            _logger.LogInformation("Found {Count} approvals matching filters for user {UserId} with role {Role}", 
+                totalCount, query.RequestorUserId, query.RequestorRole);
 
             // Apply pagination
             var approvals = await baseQuery
@@ -125,7 +131,11 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
                 .Take(query.PageSize)
                 .ToListAsync();
 
+            _logger.LogInformation("Retrieved {Count} approvals after pagination", approvals.Count);
+
                 var dtos = approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToArray();
+
+                _logger.LogInformation("Mapped {Count} approvals to DTOs", dtos.Length);
 
                 return new PagedResult<DiscountApprovalDto>
                 {

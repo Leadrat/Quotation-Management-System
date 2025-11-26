@@ -142,12 +142,7 @@ export default function CompanyDetailsPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb
-        items={[
-          { label: "Admin", path: "/admin" },
-          { label: "Company Details", path: "/admin/company-details" },
-        ]}
-      />
+      <PageBreadcrumb pageTitle="Company Details" />
 
       <div className="mb-6">
         <Link
@@ -207,7 +202,7 @@ export default function CompanyDetailsPage() {
         </div>
       )}
 
-      <ComponentCard>
+      <ComponentCard title="Company Details">
         <CompanyDetailsForm
           initialData={companyDetails || { bankDetails: [] }}
           onSubmit={handleSubmit}

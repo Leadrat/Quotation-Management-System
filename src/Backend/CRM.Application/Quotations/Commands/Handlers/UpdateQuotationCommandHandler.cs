@@ -56,8 +56,16 @@ namespace CRM.Application.Quotations.Commands.Handlers
                 throw new QuotationNotFoundException(command.QuotationId);
             }
 
-            // Authorization: User owns quotation or is admin
+            // Authorization: Only SalesRep who owns quotation or Admin can update
+            // Managers can only VIEW quotations, not update them
             var isAdmin = string.Equals(command.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
+            var isManager = string.Equals(command.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+            
+            if (isManager)
+            {
+                throw new UnauthorizedAccessException("Managers can only view quotations, not update them.");
+            }
+            
             if (!isAdmin && quotation.CreatedByUserId != command.UpdatedByUserId)
             {
                 throw new UnauthorizedAccessException("You do not have permission to update this quotation.");

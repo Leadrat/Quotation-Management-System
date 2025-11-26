@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import PageBreadcrumb from "@/components/tailadmin/common/PageBreadCrumb";
 import ComponentCard from "@/components/tailadmin/common/ComponentCard";
 import { FolderIcon, FileIcon, DollarLineIcon, CheckCircleIcon } from "@/icons";
+import PaymentsSummaryCards from "./components/PaymentsSummaryCards";
 import { ReportsApi } from "@/lib/api";
 import { getAccessToken, getRoleFromToken } from "@/lib/session";
 
@@ -26,16 +27,30 @@ export default function DashboardPage() {
     const role = getRoleFromToken(token);
     setUserRole(role);
     loadStats(role);
+
+    // Real-time refresh every 30 seconds
+    const interval = setInterval(() => {
+      loadStats(role);
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const loadStats = async (role: string | null) => {
     try {
       setLoading(true);
       
+      console.log("Loading dashboard stats for role:", role);
+      
       // Load basic dashboard stats
       const response = await ReportsApi.getDashboardStats();
-      if (response.success) {
+      console.log("Dashboard stats response:", response);
+      
+      if (response.success && response.data) {
+        console.log("Dashboard stats data:", response.data);
         setStats(response.data);
+      } else {
+        console.error("Dashboard stats response not successful:", response);
       }
 
       // If user is SalesRep, load sales dashboard metrics
@@ -55,6 +70,13 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("Error loading dashboard stats:", err);
+      // Set default values on error
+      setStats({
+        totalClients: 0,
+        totalQuotations: 0,
+        totalPayments: 0,
+        pendingApprovals: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -69,6 +91,7 @@ export default function DashboardPage() {
     <>
       <PageBreadcrumb pageTitle="Dashboard" />
       
+      {/* Core summary cards */}
       <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${userRole === "SalesRep" ? "lg:grid-cols-6" : "lg:grid-cols-4"} mb-6`}>
         {/* Total Clients Card */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
@@ -180,6 +203,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Payments summary (Spec 028) */}
+      <PaymentsSummaryCards />
 
       <ComponentCard title="Welcome to CRM Quotation Management System" desc="Use the navigation to manage clients, quotations, payments, and more.">
         <p className="text-gray-500 dark:text-gray-400">

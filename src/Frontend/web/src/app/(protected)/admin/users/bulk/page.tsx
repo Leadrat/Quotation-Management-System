@@ -87,7 +87,7 @@ export default function BulkUserOperationsPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Bulk User Operations" />
+      <PageBreadcrumb pageTitle="Bulk User Operations" />
       
       <ComponentCard>
         <div className="flex gap-2 border-b border-stroke mb-6 dark:border-strokedark">

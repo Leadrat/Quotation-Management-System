@@ -9,6 +9,7 @@ namespace CRM.Domain.Entities
     public class Quotation
     {
         public Guid QuotationId { get; set; }
+        public Guid TenantId { get; set; }
         public Guid ClientId { get; set; }
         public Guid CreatedByUserId { get; set; }
         public string QuotationNumber { get; set; } = string.Empty;
@@ -31,10 +32,12 @@ namespace CRM.Domain.Entities
         public string? Notes { get; set; }
         public bool IsPendingApproval { get; set; }
         public Guid? PendingApprovalId { get; set; }
+        public Guid? TemplateId { get; set; } // Reference to template used to create this quotation
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
         // Navigation properties
+        public virtual Tenant? Tenant { get; set; }
         public virtual Client Client { get; set; } = null!;
         public virtual User CreatedByUser { get; set; } = null!;
         public virtual ICollection<QuotationLineItem> LineItems { get; set; } = new List<QuotationLineItem>();

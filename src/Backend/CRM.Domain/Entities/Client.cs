@@ -8,6 +8,7 @@ namespace CRM.Domain.Entities
     public class Client
     {
         public Guid ClientId { get; set; }
+        public Guid TenantId { get; set; }
         public string CompanyName { get; set; } = string.Empty;
         public string? ContactName { get; set; }
         public string Email { get; set; } = string.Empty;
@@ -26,6 +27,7 @@ namespace CRM.Domain.Entities
         public DateTimeOffset UpdatedAt { get; set; }
         public DateTimeOffset? DeletedAt { get; set; }
 
+        public virtual Tenant? Tenant { get; set; }
         public virtual User CreatedByUser { get; set; } = null!;
 
         public bool IsActive() => DeletedAt == null;

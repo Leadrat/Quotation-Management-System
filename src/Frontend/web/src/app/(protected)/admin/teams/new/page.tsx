@@ -21,7 +21,7 @@ export default function NewTeamPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Create Team" />
+      <PageBreadcrumb pageTitle="Create Team" />
       <ComponentCard>
         <h2 className="text-2xl font-bold text-black dark:text-white mb-6">Create New Team</h2>
         <TeamForm

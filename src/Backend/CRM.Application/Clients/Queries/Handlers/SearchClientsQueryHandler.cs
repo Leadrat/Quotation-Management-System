@@ -34,14 +34,18 @@ namespace CRM.Application.Clients.Queries.Handlers
                     query = query.Where(c => c.DeletedAt == null);
                 }
 
-                // Authorization scope
+                // Authorization scope - Admin and Manager see all clients
                 var isAdmin = string.Equals(q.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
-                if (!isAdmin)
+                var isManager = string.Equals(q.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+                
+                if (!isAdmin && !isManager)
                 {
+                    // SalesRep sees only their own clients
                     query = query.Where(c => c.CreatedByUserId == q.RequestorUserId);
                 }
                 else if (q.CreatedByUserId.HasValue)
                 {
+                    // Admin or Manager filtering by specific user
                     query = query.Where(c => c.CreatedByUserId == q.CreatedByUserId.Value);
                 }
 

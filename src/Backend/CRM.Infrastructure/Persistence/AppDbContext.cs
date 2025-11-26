@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using CRM.Domain.Entities;
+using CRM.Domain.Imports;
 using CRM.Domain.Admin;
 using CRM.Domain.UserManagement;
 using CRM.Application.Common.Persistence;
@@ -12,6 +13,7 @@ public class AppDbContext : DbContext, IAppDbContext
     {
     }
 
+    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
@@ -29,12 +31,21 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<QuotationResponse> QuotationResponses => Set<QuotationResponse>();
     public DbSet<ClientPortalOtp> ClientPortalOtps => Set<ClientPortalOtp>();
     public DbSet<QuotationPageView> QuotationPageViews => Set<QuotationPageView>();
+    public DbSet<DocumentTemplate> DocumentTemplates { get; set; }
     public DbSet<QuotationTemplate> QuotationTemplates => Set<QuotationTemplate>();
     public DbSet<QuotationTemplateLineItem> QuotationTemplateLineItems => Set<QuotationTemplateLineItem>();
+    public DbSet<TemplatePlaceholder> TemplatePlaceholders => Set<TemplatePlaceholder>();
     public DbSet<DiscountApproval> DiscountApprovals => Set<DiscountApproval>();
-    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<UserNotification> Notifications => Set<UserNotification>();
+    public DbSet<NotificationType> NotificationTypes => Set<NotificationType>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<EmailNotificationLog> EmailNotificationLogs => Set<EmailNotificationLog>();
+    public DbSet<NotificationDispatchAttempt> NotificationDispatchAttempts => Set<NotificationDispatchAttempt>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<NotificationChannelConfiguration> NotificationChannelConfigurations => Set<NotificationChannelConfiguration>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<NotificationOperationLog> NotificationOperationLogs => Set<NotificationOperationLog>();
+    public DbSet<NotificationAlert> NotificationAlerts => Set<NotificationAlert>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentGatewayConfig> PaymentGatewayConfigs => Set<PaymentGatewayConfig>();
     public DbSet<AnalyticsMetricsSnapshot> AnalyticsMetricsSnapshots => Set<AnalyticsMetricsSnapshot>();
@@ -88,6 +99,10 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<ProductPriceHistory> ProductPriceHistory => Set<ProductPriceHistory>();
+    
+    // Imports
+    public DbSet<ImportSession> ImportSessions => Set<ImportSession>();
+    public DbSet<ImportedTemplate> ImportedTemplates => Set<ImportedTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

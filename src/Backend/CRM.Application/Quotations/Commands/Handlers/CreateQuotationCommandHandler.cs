@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Quotations.Dtos;
 using CRM.Application.Quotations.Services;
@@ -18,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CRM.Shared.Config;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace CRM.Application.Quotations.Commands.Handlers
 {
@@ -33,6 +35,8 @@ namespace CRM.Application.Quotations.Commands.Handlers
         private readonly ILogger<CreateQuotationCommandHandler> _logger;
         private readonly ICompanyDetailsService _companyDetailsService;
         private readonly Quotations.Services.QuotationCompanyDetailsService _quotationCompanyDetailsService;
+        private readonly QuotationTemplates.Services.ITemplateProcessingService _templateProcessingService;
+        private readonly ITenantContext _tenantContext;
 
         public CreateQuotationCommandHandler(
             IAppDbContext db,
@@ -44,7 +48,9 @@ namespace CRM.Application.Quotations.Commands.Handlers
             IOptions<QuotationSettings> settings,
             ILogger<CreateQuotationCommandHandler> logger,
             ICompanyDetailsService companyDetailsService,
-            Quotations.Services.QuotationCompanyDetailsService quotationCompanyDetailsService)
+            Quotations.Services.QuotationCompanyDetailsService quotationCompanyDetailsService,
+            QuotationTemplates.Services.ITemplateProcessingService templateProcessingService,
+            ITenantContext tenantContext)
         {
             _db = db;
             _mapper = mapper;
@@ -56,6 +62,8 @@ namespace CRM.Application.Quotations.Commands.Handlers
             _logger = logger;
             _companyDetailsService = companyDetailsService;
             _quotationCompanyDetailsService = quotationCompanyDetailsService;
+            _templateProcessingService = templateProcessingService;
+            _tenantContext = tenantContext;
         }
 
         public async Task<QuotationDto> Handle(CreateQuotationCommand request)
@@ -66,13 +74,14 @@ namespace CRM.Application.Quotations.Commands.Handlers
 
             try
             {
-                // Validate client exists and user has access
+                // Validate client exists and is in current tenant
+                var currentTenantId = _tenantContext.CurrentTenantId;
                 var client = await _db.Clients
-                    .FirstOrDefaultAsync(c => c.ClientId == request.Request.ClientId);
+                    .FirstOrDefaultAsync(c => c.ClientId == request.Request.ClientId && (c.TenantId == currentTenantId || c.TenantId == null));
 
             if (client == null)
             {
-                throw new InvalidOperationException($"Client with ID {request.Request.ClientId} not found.");
+                throw new InvalidOperationException($"Client with ID {request.Request.ClientId} not found or not accessible in current tenant.");
             }
 
             // Check ownership (user created the client or is admin)
@@ -176,10 +185,44 @@ namespace CRM.Application.Quotations.Commands.Handlers
                     totals.DiscountAmount,
                     client.StateCode ?? null);
 
+            // Extract text from template if TemplateId is provided
+            string? extractedNotes = null;
+            if (request.Request.TemplateId.HasValue)
+            {
+                try
+                {
+                    var template = await _db.QuotationTemplates
+                        .FirstOrDefaultAsync(t => t.TemplateId == request.Request.TemplateId.Value);
+                    
+                    if (template != null && template.IsFileBased)
+                    {
+                        _logger.LogInformation("Extracting text from template {TemplateId} for quotation", template.TemplateId);
+                        var extractedText = await _templateProcessingService.ExtractTextFromTemplateAsync(template);
+                        
+                        if (!string.IsNullOrWhiteSpace(extractedText))
+                        {
+                            // Parse extracted text to find relevant sections
+                            extractedNotes = ParseTemplateTextForNotes(extractedText);
+                            _logger.LogInformation("Extracted {Length} characters from template. Notes section: {NotesLength} characters", 
+                                extractedText.Length, extractedNotes?.Length ?? 0);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to extract text from template {TemplateId}, continuing without template text", 
+                        request.Request.TemplateId);
+                }
+            }
+
+            // Combine user-provided notes with extracted template text
+            string? finalNotes = CombineNotes(request.Request.Notes, extractedNotes);
+
             // Create quotation entity
             var quotation = new Quotation
             {
                 QuotationId = Guid.NewGuid(),
+                TenantId = currentTenantId,
                 ClientId = request.Request.ClientId,
                 CreatedByUserId = request.CreatedByUserId,
                 QuotationNumber = quotationNumber,
@@ -194,7 +237,8 @@ namespace CRM.Application.Quotations.Commands.Handlers
                 SgstAmount = taxResult.SgstAmount,
                 IgstAmount = taxResult.IgstAmount,
                 TotalAmount = totals.SubTotal - totals.DiscountAmount + taxResult.TotalTax,
-                Notes = request.Request.Notes,
+                Notes = finalNotes,
+                TemplateId = request.Request.TemplateId,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
@@ -387,6 +431,107 @@ namespace CRM.Application.Quotations.Commands.Handlers
             if (user == null || user.Role == null) return false;
 
             return string.Equals(user.Role.RoleName, "Admin", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Parses extracted template text to find relevant sections like Terms & Conditions, Notes, etc.
+        /// </summary>
+        private string? ParseTemplateTextForNotes(string extractedText)
+        {
+            if (string.IsNullOrWhiteSpace(extractedText))
+                return null;
+
+            // Look for common sections in templates
+            var sections = new[]
+            {
+                "Terms and Conditions",
+                "Terms & Conditions",
+                "Terms &amp; Conditions",
+                "Terms",
+                "Notes",
+                "Additional Notes",
+                "Remarks",
+                "Payment Terms",
+                "Delivery Terms"
+            };
+
+            var text = extractedText;
+            var maxLength = 2000; // Notes field max length
+
+            // Try to find and extract relevant sections
+            foreach (var section in sections)
+            {
+                // Case-insensitive search for section headers
+                var pattern = $@"(?i)(?:^|\n)\s*{Regex.Escape(section)}\s*[:]?\s*\n(.*?)(?=\n\s*(?:{string.Join("|", sections.Select(Regex.Escape))})|$)";
+                var match = Regex.Match(text, pattern, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                
+                if (match.Success)
+                {
+                    var sectionContent = match.Groups[1].Value.Trim();
+                    if (!string.IsNullOrWhiteSpace(sectionContent))
+                    {
+                        // Limit to max length
+                        if (sectionContent.Length > maxLength)
+                        {
+                            sectionContent = sectionContent.Substring(0, maxLength - 3) + "...";
+                        }
+                        return sectionContent;
+                    }
+                }
+            }
+
+            // If no specific section found, extract text after common markers
+            // Look for text after "Notes:", "Terms:", etc.
+            var notePattern = @"(?i)(?:Notes|Terms|Remarks|Additional)\s*[:]\s*(.+?)(?=\n\s*(?:[A-Z][a-z]+\s*[:]|$))";
+            var noteMatch = Regex.Match(text, notePattern, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            if (noteMatch.Success)
+            {
+                var content = noteMatch.Groups[1].Value.Trim();
+                if (content.Length > maxLength)
+                {
+                    content = content.Substring(0, maxLength - 3) + "...";
+                }
+                return content;
+            }
+
+            // If still nothing found, return a portion of the text (last 2000 characters or all if shorter)
+            // This captures general content that might be useful
+            if (text.Length > maxLength)
+            {
+                // Try to get text from the end (often where terms/notes are)
+                text = text.Substring(text.Length - maxLength);
+            }
+
+            // Clean up the text
+            text = Regex.Replace(text, @"\s+", " ").Trim();
+            
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+
+        /// <summary>
+        /// Combines user-provided notes with extracted template text
+        /// </summary>
+        private string? CombineNotes(string? userNotes, string? extractedNotes)
+        {
+            if (string.IsNullOrWhiteSpace(userNotes) && string.IsNullOrWhiteSpace(extractedNotes))
+                return null;
+
+            if (string.IsNullOrWhiteSpace(userNotes))
+                return extractedNotes;
+
+            if (string.IsNullOrWhiteSpace(extractedNotes))
+                return userNotes;
+
+            // Combine both, with user notes first, then template notes
+            var combined = $"{userNotes.Trim()}\n\n--- Template Content ---\n{extractedNotes.Trim()}";
+            
+            // Limit to max length (2000 characters)
+            if (combined.Length > 2000)
+            {
+                combined = combined.Substring(0, 1997) + "...";
+            }
+
+            return combined;
         }
     }
 }

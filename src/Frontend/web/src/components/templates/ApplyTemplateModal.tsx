@@ -90,10 +90,10 @@ export default function ApplyTemplateModal({ clientId, onSelect, onClose }: Appl
               {filteredTemplates.map((template) => (
                 <div
                   key={template.templateId}
-                  className={`cursor-pointer rounded border p-4 transition ${
+                  className={`cursor-pointer rounded border-2 p-4 transition ${
                     selectedTemplate?.templateId === template.templateId
-                      ? "border-primary bg-primary/10"
-                      : "border-stroke hover:border-primary dark:border-strokedark"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-stroke hover:border-blue-500 dark:border-strokedark"
                   }`}
                   onClick={() => setSelectedTemplate(template)}
                 >
@@ -154,9 +154,9 @@ export default function ApplyTemplateModal({ clientId, onSelect, onClose }: Appl
           <button
             onClick={handleApply}
             disabled={!selectedTemplate}
-            className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90 disabled:opacity-50"
+            className="rounded border-2 border-blue-500 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-boxdark dark:border-blue-500 dark:text-white dark:hover:bg-blue-900/20"
           >
-            Apply Template
+            Apply Selected Template
           </button>
         </div>
       </div>

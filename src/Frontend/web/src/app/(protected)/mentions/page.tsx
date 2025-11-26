@@ -1,13 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { UserManagementApi } from "@/lib/api";
-import { getAccessToken } from "@/lib/session";
+import { getAccessToken, parseJwt } from "@/lib/session";
 import PageBreadcrumb from "@/components/tailadmin/common/PageBreadCrumb";
 import ComponentCard from "@/components/tailadmin/common/ComponentCard";
 import MentionBadge from "@/components/user-management/MentionBadge";
 import { Mention } from "@/types/userManagement";
 import Alert from "@/components/tailadmin/ui/alert/Alert";
-import { getAccessToken, parseJwt } from "@/lib/session";
 import Badge from "@/components/tailadmin/ui/badge/Badge";
 
 export default function MentionsPage() {
@@ -84,8 +83,8 @@ export default function MentionsPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="Mentions" />
-        <ComponentCard>
+        <PageBreadcrumb pageTitle="Mentions" />
+        <ComponentCard title="Mentions">
           <div className="text-center py-8">Loading mentions...</div>
         </ComponentCard>
       </div>
@@ -94,9 +93,9 @@ export default function MentionsPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Mentions" />
-      
-      <ComponentCard>
+      <PageBreadcrumb pageTitle="Mentions" />
+
+      <ComponentCard title="Mentions">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <h2 className="text-2xl font-bold text-black dark:text-white">Mentions</h2>
@@ -109,31 +108,28 @@ export default function MentionsPage() {
           <div className="flex gap-2 border border-stroke rounded-lg p-1 dark:border-strokedark">
             <button
               onClick={() => setFilter("all")}
-              className={`px-3 py-1 rounded text-sm ${
-                filter === "all"
+              className={`px-3 py-1 rounded text-sm ${filter === "all"
                   ? "bg-primary text-white"
                   : "text-body-color dark:text-body-color-dark"
-              }`}
+                }`}
             >
               All
             </button>
             <button
               onClick={() => setFilter("unread")}
-              className={`px-3 py-1 rounded text-sm ${
-                filter === "unread"
+              className={`px-3 py-1 rounded text-sm ${filter === "unread"
                   ? "bg-primary text-white"
                   : "text-body-color dark:text-body-color-dark"
-              }`}
+                }`}
             >
               Unread
             </button>
             <button
               onClick={() => setFilter("read")}
-              className={`px-3 py-1 rounded text-sm ${
-                filter === "read"
+              className={`px-3 py-1 rounded text-sm ${filter === "read"
                   ? "bg-primary text-white"
                   : "text-body-color dark:text-body-color-dark"
-              }`}
+                }`}
             >
               Read
             </button>
@@ -187,4 +183,3 @@ export default function MentionsPage() {
     </div>
   );
 }
-

@@ -15,19 +15,19 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   
   return (
-    <div className="dark:bg-boxdark-2 dark:text-bodydark">
+    <div className="dark:bg-gray-900 dark:text-gray-200">
       <Backdrop />
       <div className="flex h-screen overflow-hidden">
         <AppSidebar />
         <div 
-          className={`relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden transition-all duration-300 ${
+          className={`relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden transition-all duration-300 bg-white dark:bg-gray-900 ${
             isExpanded || isHovered 
               ? 'lg:ml-[290px]' 
               : 'lg:ml-[90px]'
           }`}
         >
           <AppHeader />
-          <main className="flex-1">
+          <main className="flex-1 bg-white dark:bg-gray-900">
             <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
               {children}
             </div>

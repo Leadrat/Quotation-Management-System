@@ -72,17 +72,6 @@ namespace CRM.Application.Quotations.Services
                 throw new InvalidOperationException($"Failed to create access link: {ex.Message}", ex);
             }
 
-            byte[] pdfBytes;
-            try
-            {
-                pdfBytes = await _pdfService.GenerateQuotationPdfAsync(quotation);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generating PDF for quotation {QuotationId}", quotation.QuotationId);
-                throw new InvalidOperationException($"Failed to generate quotation PDF: {ex.Message}", ex);
-            }
-
             var viewUrl = BuildViewUrl(quotation.QuotationId, token);
 
             try
@@ -90,7 +79,6 @@ namespace CRM.Application.Quotations.Services
                 await _emailService.SendQuotationEmailAsync(
                     quotation,
                     request.RecipientEmail,
-                    pdfBytes,
                     viewUrl,
                     request.CcEmails,
                     request.BccEmails,

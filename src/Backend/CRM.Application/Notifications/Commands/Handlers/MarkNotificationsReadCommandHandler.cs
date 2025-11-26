@@ -1,15 +1,18 @@
+using CRM.Domain.Entities;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Notifications.Commands;
 using CRM.Domain.Events;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CRM.Application.Notifications.Commands.Handlers
 {
-    public class MarkNotificationsReadCommandHandler
+    public class MarkNotificationsReadCommandHandler : IRequestHandler<MarkNotificationsReadCommand, int>
     {
         private readonly IAppDbContext _db;
         private readonly ILogger<MarkNotificationsReadCommandHandler> _logger;
@@ -22,9 +25,9 @@ namespace CRM.Application.Notifications.Commands.Handlers
             _logger = logger;
         }
 
-        public async Task<int> Handle(MarkNotificationsReadCommand command)
+        public async Task<int> Handle(MarkNotificationsReadCommand command, CancellationToken cancellationToken)
         {
-            IQueryable<Domain.Entities.Notification> query = _db.Notifications
+            IQueryable<UserNotification> query = _db.Notifications
                 .Where(n => n.RecipientUserId == command.RequestedByUserId && !n.IsRead);
 
             // If specific IDs provided, filter by them; otherwise mark all unread
@@ -33,12 +36,14 @@ namespace CRM.Application.Notifications.Commands.Handlers
                 query = query.Where(n => command.NotificationIds.Contains(n.NotificationId));
             }
 
-            var notifications = await query.ToListAsync();
+            var notifications = await query.ToListAsync(cancellationToken);
             var count = 0;
 
             foreach (var notification in notifications)
             {
-                notification.MarkAsRead();
+                notification.IsRead = true;
+                notification.ReadAt = DateTimeOffset.UtcNow;
+                notification.UpdatedAt = DateTimeOffset.UtcNow;
                 count++;
 
                 // Publish domain event (simplified - in production, use event bus)
@@ -54,7 +59,7 @@ namespace CRM.Application.Notifications.Commands.Handlers
 
             if (count > 0)
             {
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
             }
 
             _logger.LogInformation("Marked {Count} notifications as read for user {UserId}", count, command.RequestedByUserId);

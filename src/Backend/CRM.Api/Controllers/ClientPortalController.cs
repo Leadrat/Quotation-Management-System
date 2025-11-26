@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -28,7 +29,9 @@ namespace CRM.Api.Controllers
         private readonly IValidator<SubmitQuotationResponseRequest> _responseValidator;
         private readonly IQuotationPdfGenerationService _pdfService;
         private readonly IClientPortalOtpService _otpService;
+        private readonly Application.QuotationTemplates.Services.ITemplateProcessingService _templateProcessingService;
         private readonly IAppDbContext _db;
+        private readonly Microsoft.Extensions.Logging.ILogger<ClientPortalController> _logger;
 
         public ClientPortalController(
             GetQuotationByAccessTokenQueryHandler getByTokenHandler,
@@ -37,7 +40,9 @@ namespace CRM.Api.Controllers
             IValidator<SubmitQuotationResponseRequest> responseValidator,
             IQuotationPdfGenerationService pdfService,
             IClientPortalOtpService otpService,
-            IAppDbContext db)
+            Application.QuotationTemplates.Services.ITemplateProcessingService templateProcessingService,
+            IAppDbContext db,
+            Microsoft.Extensions.Logging.ILogger<ClientPortalController> logger)
         {
             _getByTokenHandler = getByTokenHandler;
             _responseHandler = responseHandler;
@@ -45,7 +50,9 @@ namespace CRM.Api.Controllers
             _responseValidator = responseValidator;
             _pdfService = pdfService;
             _otpService = otpService;
+            _templateProcessingService = templateProcessingService;
             _db = db;
+            _logger = logger;
         }
 
         [HttpGet("{quotationId:guid}/{accessToken}/validate")]
@@ -255,6 +262,55 @@ namespace CRM.Api.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{quotationId:guid}/{accessToken}/template-preview")]
+        public async Task<IActionResult> GetQuotationTemplatePreview(Guid quotationId, string accessToken)
+        {
+            try
+            {
+                var link = await _db.QuotationAccessLinks
+                    .Include(l => l.Quotation)
+                        .ThenInclude(q => q.Client)
+                    .Include(l => l.Quotation)
+                        .ThenInclude(q => q.CreatedByUser)
+                    .Include(l => l.Quotation)
+                        .ThenInclude(q => q.LineItems)
+                    .FirstOrDefaultAsync(l => l.QuotationId == quotationId && l.AccessToken == accessToken);
+
+                if (link == null || !link.IsActive || link.IsExpired())
+                {
+                    return NotFound(new { error = "Invalid or expired access link." });
+                }
+
+                var quotation = link.Quotation;
+                if (quotation == null)
+                {
+                    return NotFound(new { error = "Quotation not found." });
+                }
+
+                if (!quotation.TemplateId.HasValue)
+                {
+                    return Ok(new { hasTemplate = false, message = "No template applied to this quotation." });
+                }
+
+                var template = await _db.QuotationTemplates
+                    .FirstOrDefaultAsync(t => t.TemplateId == quotation.TemplateId.Value);
+
+                if (template == null || !template.IsFileBased)
+                {
+                    return Ok(new { hasTemplate = false, message = "Applied template not found or is not file-based." });
+                }
+
+                var htmlContent = await _templateProcessingService.ProcessTemplateToHtmlAsync(template, quotation);
+
+                return Ok(new { hasTemplate = true, templateName = template.Name, content = htmlContent });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting client portal template preview for quotation {QuotationId}", quotationId);
+                return StatusCode(500, new { error = "Failed to get template preview", details = ex.Message });
             }
         }
 

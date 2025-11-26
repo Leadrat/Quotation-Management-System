@@ -67,7 +67,7 @@ export default function CategoriesPage() {
 
   return (
     <div>
-      <PageBreadcrumb pageName="Product/Service Categories" />
+      <PageBreadcrumb pageTitle="Product/Service Categories" />
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
         <div className="border-b border-stroke px-6.5 py-4 dark:border-strokedark">
@@ -139,7 +139,6 @@ export default function CategoriesPage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button
-                    type="button"
                     variant="outline"
                     onClick={() => {
                       setShowForm(false);
@@ -148,7 +147,7 @@ export default function CategoriesPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={loading}>
+                  <Button variant="primary" disabled={loading}>
                     {loading ? "Saving..." : editingCategory ? "Update" : "Create"}
                   </Button>
                 </div>

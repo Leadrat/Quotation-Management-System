@@ -4,6 +4,8 @@ Auto-generated from all feature plans. Last updated: 2025-11-19
 
 ## Active Technologies
 - [if applicable, e.g., PostgreSQL, CoreData, files or N/A] (main)
+- C# 12 / .NET 8 Web API (Backend), TypeScript / Next.js 16 (Frontend) + ASP.NET Core, MediatR, EF Core, AutoMapper, FluentValidation, Serilog (Backend); React Query, React Hook Form, Tailwind CSS, TailAdmin (Frontend); DocumentFormat.OpenXml, PdfSharpCore (Document processing) (001-template-upload)
+- PostgreSQL 14+ with UUID PKs, file storage for uploaded documents and converted templates (local filesystem or cloud storage) (001-template-upload)
 
 - [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION] (main)
 
@@ -24,6 +26,7 @@ cd src; pytest; ruff check .
 [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]: Follow standard conventions
 
 ## Recent Changes
+- 001-template-upload: Added C# 12 / .NET 8 Web API (Backend), TypeScript / Next.js 16 (Frontend) + ASP.NET Core, MediatR, EF Core, AutoMapper, FluentValidation, Serilog (Backend); React Query, React Hook Form, Tailwind CSS, TailAdmin (Frontend); DocumentFormat.OpenXml, PdfSharpCore (Document processing)
 - main: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 
 - main: Added [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION] + [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]

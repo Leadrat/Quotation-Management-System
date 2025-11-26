@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  devIndicators: false,
+  env: {
+    NEXT_PUBLIC_API_BASE_URL: 'http://localhost:5001'
+  },
   webpack: (config) => {
     // Exclude SVGs from the default next/image or file loader
     const fileLoaderRule = config.module.rules.find(

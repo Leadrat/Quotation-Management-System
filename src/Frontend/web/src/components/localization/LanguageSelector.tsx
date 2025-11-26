@@ -22,8 +22,14 @@ export function LanguageSelector() {
     try {
       const langs = await LocalizationApi.getSupportedLanguages();
       setLanguages(langs.filter(l => l.isActive));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to load languages", error);
+      // If API base URL is not configured, silently fail and use default language
+      if (error?.message?.includes("No such host") || error?.message?.includes("API URL cannot be empty")) {
+        console.warn("API base URL not configured. Please set NEXT_PUBLIC_API_BASE_URL environment variable.");
+      }
+      // Set empty languages array so component doesn't break
+      setLanguages([]);
     } finally {
       setLoading(false);
     }
@@ -47,6 +53,20 @@ export function LanguageSelector() {
 
   if (loading) {
     return <div>Loading...</div>;
+  }
+
+  // If no languages loaded (e.g., API not configured), show default English option
+  if (languages.length === 0) {
+    return (
+      <select
+        value={currentLang}
+        onChange={(e) => handleLanguageChange(e.target.value)}
+        className="px-3 py-2 border rounded-md"
+        disabled
+      >
+        <option value="en">English</option>
+      </select>
+    );
   }
 
   return (

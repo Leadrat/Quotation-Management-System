@@ -7,6 +7,7 @@ namespace CRM.Domain.Entities;
 public class User
 {
     public Guid UserId { get; set; }
+    public Guid TenantId { get; set; }
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
@@ -35,6 +36,7 @@ public class User
     public DateTime? LastSeenAt { get; set; }
     public PresenceStatus PresenceStatus { get; set; } = PresenceStatus.Offline;
 
+    public virtual Tenant? Tenant { get; set; }
     public virtual Role? Role { get; set; }
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     public virtual User? ReportingManager { get; set; }

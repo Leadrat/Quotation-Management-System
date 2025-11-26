@@ -1,13 +1,24 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TemplatesApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { LineItemsEditor, TemplatePreview, TemplateErrorBoundary, TemplateFormSkeleton } from "@/components/templates";
 import { useToast, ToastContainer } from "@/components/quotations/Toast";
 import type { CreateQuotationTemplateRequest, CreateTemplateLineItemRequest, QuotationTemplate } from "@/types/templates";
 
 export default function CreateTemplatePage() {
   const router = useRouter();
+  
+  useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    
+    // Redirect managers away from templates - Admin and SalesRep can access
+    if (userRole !== "Admin" && userRole !== "SalesRep") {
+      router.replace("/dashboard");
+    }
+  }, [router]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");

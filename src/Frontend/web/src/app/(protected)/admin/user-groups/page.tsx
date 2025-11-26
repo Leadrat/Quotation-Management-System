@@ -54,7 +54,7 @@ export default function UserGroupsPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="User Groups" />
+        <PageBreadcrumb pageTitle="User Groups" />
         <ComponentCard>
           <div className="text-center py-8">Loading user groups...</div>
         </ComponentCard>
@@ -64,7 +64,7 @@ export default function UserGroupsPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="User Groups" />
+      <PageBreadcrumb pageTitle="User Groups" />
       
       <ComponentCard>
         <div className="flex items-center justify-between mb-6">

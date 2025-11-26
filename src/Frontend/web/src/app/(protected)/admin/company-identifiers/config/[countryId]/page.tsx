@@ -124,8 +124,7 @@ export default function CountryIdentifierConfigPage() {
   if (loading) return <div className="p-6">Loading...</div>;
 
   const availableTypes = identifierTypes.filter(
-    (type) => !configurations.some((c) => c.identifierTypeId === type.identifierTypeId && !editing) ||
-      (editing && c.configurationId === editing.configurationId)
+    (type) => !configurations.some((c: any) => c.identifierTypeId === type.identifierTypeId && (!editing || c.configurationId !== editing.configurationId))
   );
 
   return (
@@ -324,9 +323,8 @@ export default function CountryIdentifierConfigPage() {
                   <td className="px-4 py-3 text-sm">{config.displayOrder}</td>
                   <td className="px-4 py-3 text-sm">
                     <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        config.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                      }`}
+                      className={`px-2 py-1 rounded text-xs ${config.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                        }`}
                     >
                       {config.isActive ? "Active" : "Inactive"}
                     </span>

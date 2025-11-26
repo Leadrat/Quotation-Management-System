@@ -100,7 +100,7 @@ export default function JurisdictionsPage() {
   return (
     <div>
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
-      <PageBreadcrumb pageName={`Jurisdictions - ${country?.countryName || "Country"}`} />
+      <PageBreadcrumb pageTitle={`Jurisdictions - ${country?.countryName || "Country"}`} />
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
         <div className="border-b border-stroke px-6.5 py-4 dark:border-strokedark">

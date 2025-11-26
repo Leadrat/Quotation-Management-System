@@ -33,6 +33,8 @@ export default function ClientPortalQuotationPage() {
   const [linkValidated, setLinkValidated] = useState(false);
   const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
   const [acceptedPopupShown, setAcceptedPopupShown] = useState(false);
+  const [templatePreview, setTemplatePreview] = useState<{ hasTemplate: boolean; templateName?: string; content?: string } | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
 
   // Validate access link on page load
   useEffect(() => {
@@ -138,12 +140,38 @@ export default function ClientPortalQuotationPage() {
     }
   };
 
+  const loadTemplatePreview = async () => {
+    try {
+      setTemplateLoading(true);
+      const result = await ClientPortalApi.getQuotationTemplatePreview(quotationId, accessToken);
+      if (result.hasTemplate) {
+        setTemplatePreview({
+          hasTemplate: true,
+          templateName: result.templateName,
+          content: result.content
+        });
+      } else {
+        setTemplatePreview({ hasTemplate: false });
+      }
+    } catch (err: any) {
+      console.error("Failed to load template preview:", err);
+      setTemplatePreview({ hasTemplate: false });
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
   const loadQuotation = async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await ClientPortalApi.getQuotation(quotationId, accessToken);
       setQuotation(res.data);
+      
+      // Load template preview if template exists
+      if (res.data.templateId) {
+        await loadTemplatePreview();
+      }
       
       // Try to load payment if quotation is accepted
       if (res.data?.status === "ACCEPTED") {
@@ -279,7 +307,7 @@ export default function ClientPortalQuotationPage() {
           <button
             onClick={handleRequestOtp}
             disabled={loading || !email}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary/90 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full rounded border-2 border-blue-500 bg-white px-4 py-2 font-semibold text-black hover:bg-blue-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:border-blue-500 dark:hover:bg-blue-50"
           >
             {loading ? "Sending..." : "Send Verification Code"}
           </button>
@@ -329,7 +357,7 @@ export default function ClientPortalQuotationPage() {
             <button
               onClick={handleVerifyOtp}
               disabled={loading || otpCode.length !== 6}
-              className="flex-1 rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary/90 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex-1 rounded border-2 border-blue-500 bg-white px-4 py-2 font-semibold text-black hover:bg-blue-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:border-blue-500 dark:hover:bg-blue-50"
             >
               {loading ? "Verifying..." : "Verify Code"}
             </button>
@@ -552,6 +580,22 @@ export default function ClientPortalQuotationPage() {
               </div>
             </div>
           </div>
+          {/* Template Preview - Intro & Terms */}
+          {templatePreview?.hasTemplate && templatePreview.content && (
+            <div className="mb-4 space-y-4">
+              {templateLoading ? (
+                <div className="rounded-lg border border-gray-200 bg-white p-6">
+                  <div className="py-4 text-center text-gray-500">Loading template content...</div>
+                </div>
+              ) : (
+                <div 
+                  className="template-sections"
+                  dangerouslySetInnerHTML={{ __html: templatePreview.content }}
+                />
+              )}
+            </div>
+          )}
+
           {quotation.notes && (
             <div className="rounded-lg border border-gray-200 p-4">
               <h3 className="mb-2 font-semibold text-black">Notes</h3>
@@ -668,12 +712,7 @@ export default function ClientPortalQuotationPage() {
                 </button>
               </>
             )}
-            <button
-              onClick={handleDownload}
-              className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50"
-            >
-              Download PDF
-            </button>
+
             <a
               href={`mailto:${quotation.companyDetails?.contactEmail || "sales@example.com"}?subject=Quotation%20${quotation.quotationNumber}`}
               className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50"

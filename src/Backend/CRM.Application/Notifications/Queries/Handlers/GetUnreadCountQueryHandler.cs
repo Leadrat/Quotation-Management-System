@@ -1,14 +1,18 @@
+using CRM.Domain.Entities;
+using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Notifications.Dtos;
 using CRM.Application.Notifications.Queries;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CRM.Application.Notifications.Queries.Handlers
 {
-    public class GetUnreadCountQueryHandler
+    public class GetUnreadCountQueryHandler : IRequestHandler<GetUnreadCountQuery, UnreadCountDto>
     {
         private readonly IAppDbContext _db;
         private readonly ILogger<GetUnreadCountQueryHandler> _logger;
@@ -21,7 +25,7 @@ namespace CRM.Application.Notifications.Queries.Handlers
             _logger = logger;
         }
 
-        public async Task<UnreadCountDto> Handle(GetUnreadCountQuery query)
+        public async Task<UnreadCountDto> Handle(GetUnreadCountQuery query, CancellationToken cancellationToken)
         {
             try
             {
@@ -29,7 +33,7 @@ namespace CRM.Application.Notifications.Queries.Handlers
                     .Where(n => n.RecipientUserId == query.RequestorUserId &&
                                !n.IsRead &&
                                !n.IsArchived)
-                    .CountAsync();
+                    .CountAsync(cancellationToken);
 
                 _logger.LogInformation("Unread count for user {UserId}: {Count}", query.RequestorUserId, count);
 

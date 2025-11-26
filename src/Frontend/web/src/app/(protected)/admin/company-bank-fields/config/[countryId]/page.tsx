@@ -125,7 +125,7 @@ export default function CountryBankFieldConfigPage() {
   const availableTypes = bankFieldTypes.filter(
     (type) =>
       !configurations.some(
-        (c) => c.bankFieldTypeId === type.bankFieldTypeId && (!editing || c.configurationId !== editing.configurationId)
+        (c: any) => c.bankFieldTypeId === type.bankFieldTypeId && (!editing || c.configurationId !== editing.configurationId)
       )
   );
 
@@ -325,9 +325,8 @@ export default function CountryBankFieldConfigPage() {
                   <td className="px-4 py-3 text-sm">{config.displayOrder}</td>
                   <td className="px-4 py-3 text-sm">
                     <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        config.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                      }`}
+                      className={`px-2 py-1 rounded text-xs ${config.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                        }`}
                     >
                       {config.isActive ? "Active" : "Inactive"}
                     </span>

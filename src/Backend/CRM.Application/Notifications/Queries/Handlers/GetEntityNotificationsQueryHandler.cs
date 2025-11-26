@@ -1,3 +1,4 @@
+using CRM.Domain.Entities;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -32,7 +33,7 @@ namespace CRM.Application.Notifications.Queries.Handlers
                 .Where(n => n.RecipientUserId == query.RequestorUserId &&
                            n.RelatedEntityType == query.EntityType &&
                            n.RelatedEntityId == query.EntityId)
-                .Include(n => n.RecipientUser)
+                .Include(n => n.User)
                 .OrderByDescending(n => n.CreatedAt)
                 .ToArrayAsync();
 

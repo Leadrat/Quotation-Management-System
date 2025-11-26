@@ -113,7 +113,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="My Profile" />
+        <PageBreadcrumb pageTitle="My Profile" />
         <ComponentCard>
           <div className="text-center py-8">Loading profile...</div>
         </ComponentCard>
@@ -124,7 +124,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="My Profile" />
+        <PageBreadcrumb pageTitle="My Profile" />
         <ComponentCard>
           <Alert color="danger">Profile not found</Alert>
         </ComponentCard>
@@ -134,7 +134,7 @@ export default function ProfilePage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="My Profile" />
+      <PageBreadcrumb pageTitle="My Profile" />
       
       <ComponentCard className="mb-6">
         <div className="flex items-start gap-6 mb-6">

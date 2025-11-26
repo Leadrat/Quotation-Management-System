@@ -8,6 +8,7 @@ using CRM.Application.Clients.Validators;
 using CRM.Application.Clients.Queries;
 using CRM.Application.Clients.Queries.Handlers;
 using CRM.Application.Common.Results;
+using CRM.Application.Common.Interfaces;
 using CRM.Infrastructure.Logging;
 using CRM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -22,12 +23,14 @@ namespace CRM.Api.Controllers
         private readonly AppDbContext _db;
         private readonly IAuditLogger _audit;
         private readonly IMapper _mapper;
+        private readonly ITenantContext _tenantContext;
 
-        public ClientsController(AppDbContext db, IAuditLogger audit, IMapper mapper)
+        public ClientsController(AppDbContext db, IAuditLogger audit, IMapper mapper, ITenantContext tenantContext)
         {
             _db = db;
             _audit = audit;
             _mapper = mapper;
+            _tenantContext = tenantContext;
         }
 
         [HttpPost]
@@ -72,7 +75,7 @@ namespace CRM.Api.Controllers
                     CreatedByUserId = userId
                 };
 
-                var handler = new CreateClientCommandHandler(_db, _mapper);
+                var handler = new CreateClientCommandHandler(_db, _mapper, _tenantContext);
                 var created = await handler.Handle(cmd);
 
                 await _audit.LogAsync("client_create_success", new { userId, created.ClientId });
@@ -103,7 +106,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> List([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] Guid? userId = null)
         {
             try
@@ -112,7 +115,7 @@ namespace CRM.Api.Controllers
             if (!Guid.TryParse(sub, out var requestorId)) return Unauthorized();
             var role = User.FindFirstValue("role") ?? string.Empty;
 
-            var handler = new GetAllClientsQueryHandler(_db, _mapper);
+            var handler = new GetAllClientsQueryHandler(_db, _mapper, _tenantContext);
             var result = await handler.Handle(new GetAllClientsQuery
             {
                 PageNumber = pageNumber,
@@ -130,7 +133,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("{clientId}")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetById([FromRoute] Guid clientId)
         {
             var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;

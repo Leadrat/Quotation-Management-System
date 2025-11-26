@@ -111,8 +111,8 @@ namespace CRM.Infrastructure.EntityConfigurations
             builder.HasIndex(x => x.PreviousVersionId)
                 .HasFilter("[PreviousVersionId] IS NOT NULL");
 
-            // Unique constraint: Name must be unique per owner (excluding deleted)
-            builder.HasIndex(x => new { x.Name, x.OwnerUserId })
+            // Unique constraint: Name must be unique per owner per version (excluding deleted)
+            builder.HasIndex(x => new { x.Name, x.OwnerUserId, x.Version })
                 .IsUnique()
                 .HasFilter("[DeletedAt] IS NULL");
         }

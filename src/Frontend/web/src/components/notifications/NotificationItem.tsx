@@ -1,126 +1,133 @@
-"use client";
-import { Notification } from "@/types/notifications";
-import Link from "next/link";
-import { formatDateTime } from "@/utils/quotationFormatter";
+'use client';
+
+import { formatDistanceToNow } from 'date-fns';
+import type { Notification } from '../../lib/types/notification.types';
+import { useNotificationStore } from '../../store/notificationStore';
+import { NotificationDispatchStatus } from './NotificationDispatchStatus';
 
 interface NotificationItemProps {
   notification: Notification;
-  onMarkRead?: (notificationId: string) => void;
-  onArchive?: (notificationId: string) => void;
-  onUnarchive?: (notificationId: string) => void;
+  onClick?: (notification: Notification) => void;
 }
 
-export function NotificationItem({
-  notification,
-  onMarkRead,
-  onArchive,
-  onUnarchive,
-}: NotificationItemProps) {
-  const getEventIcon = (eventType: string) => {
-    switch (eventType) {
-      case "QuotationSent":
-        return "📧";
-      case "QuotationViewed":
-        return "👁️";
-      case "QuotationAccepted":
-        return "✅";
-      case "QuotationRejected":
-        return "❌";
-      case "QuotationExpired":
-        return "⏰";
-      case "DiscountApprovalRequested":
-        return "🔔";
-      case "DiscountApprovalApproved":
-        return "✓";
-      case "DiscountApprovalRejected":
-        return "✗";
+export function NotificationItem({ notification, onClick }: NotificationItemProps) {
+  const { markAsRead } = useNotificationStore();
+
+  const handleClick = async () => {
+    if (!notification.isRead) {
+      await markAsRead(notification.notificationId);
+    }
+    onClick?.(notification);
+  };
+
+  const getNotificationIcon = (typeName: string) => {
+    switch (typeName) {
+      case 'QuotationApproved':
+        return '✅';
+      case 'QuotationRejected':
+        return '❌';
+      case 'PaymentRequest':
+        return '💰';
+      case 'PaymentReceived':
+        return '✅';
+      case 'QuotationExpiring':
+        return '⏰';
+      case 'SystemMaintenance':
+        return '🔧';
+      case 'UserWelcome':
+        return '👋';
+      case 'PasswordChanged':
+        return '🔒';
+      case 'ProfileUpdated':
+        return '👤';
       default:
-        return "🔔";
+        return '📢';
     }
   };
 
-  const getEventColor = (eventType: string) => {
-    if (eventType.includes("Accepted") || eventType.includes("Approved")) {
-      return "text-green-600 dark:text-green-400";
-    }
-    if (eventType.includes("Rejected") || eventType.includes("Expired")) {
-      return "text-red-600 dark:text-red-400";
-    }
-    if (eventType.includes("Requested")) {
-      return "text-yellow-600 dark:text-yellow-400";
-    }
-    return "text-blue-600 dark:text-blue-400";
+  const getChannelBadges = (sentVia: string) => {
+    const channels = sentVia.split(',').map(c => c.trim());
+    return channels.map(channel => (
+      <span
+        key={channel}
+        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+      >
+        {channel}
+      </span>
+    ));
   };
 
   return (
     <div
-      className={`rounded-lg border p-4 transition-colors ${
-        notification.isUnread
-          ? "border-primary bg-primary/5 dark:bg-primary/10"
-          : "border-stroke bg-white dark:border-strokedark dark:bg-boxdark"
+      className={`p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors ${
+        !notification.isRead ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
       }`}
+      onClick={handleClick}
     >
-      <div className="flex items-start gap-3">
-        <div className={`text-2xl ${getEventColor(notification.eventType)}`}>
-          {getEventIcon(notification.eventType)}
+      <div className="flex items-start space-x-3">
+        {/* Icon */}
+        <div className="flex-shrink-0">
+          <span className="text-2xl">
+            {getNotificationIcon(notification.notificationType.typeName)}
+          </span>
         </div>
-        <div className="flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1">
-              <p
-                className={`text-sm ${
-                  notification.isUnread
-                    ? "font-semibold text-black dark:text-white"
-                    : "text-gray-700 dark:text-gray-300"
-                }`}
-              >
-                {notification.message}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {formatDateTime(notification.createdAt)}
-              </p>
-              {notification.relatedEntityType && notification.relatedEntityId && (
-                <Link
-                  href={notification.entityLinkUrl}
-                  className="mt-2 inline-block text-xs text-primary hover:underline"
-                >
-                  View {notification.relatedEntityType} →
-                </Link>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <h4 className={`text-sm font-medium ${!notification.isRead ? 'text-gray-900' : 'text-gray-700'}`}>
+              {notification.title}
+            </h4>
+            {!notification.isRead && (
+              <div className="flex-shrink-0">
+                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-1 text-sm text-gray-600 line-clamp-2">
+            {notification.message}
+          </p>
+
+          {/* Metadata */}
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-gray-500">
+                {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+              </span>
+              {notification.readAt && (
+                <span className="text-xs text-gray-400">
+                  • Read {formatDistanceToNow(new Date(notification.readAt), { addSuffix: true })}
+                </span>
               )}
             </div>
-            {notification.isUnread && (
-              <span className="h-2 w-2 rounded-full bg-primary"></span>
-            )}
+
+            {/* Channel badges */}
+            <div className="flex items-center space-x-1">
+              {getChannelBadges(notification.sentVia)}
+            </div>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            {notification.isUnread && onMarkRead && (
-              <button
-                onClick={() => onMarkRead(notification.notificationId)}
-                className="text-xs text-primary hover:underline"
-              >
-                Mark as read
-              </button>
-            )}
-            {!notification.isArchived && onArchive && (
-              <button
-                onClick={() => onArchive(notification.notificationId)}
-                className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                Archive
-              </button>
-            )}
-            {notification.isArchived && onUnarchive && (
-              <button
-                onClick={() => onUnarchive(notification.notificationId)}
-                className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                Unarchive
-              </button>
-            )}
-          </div>
+
+          {/* Dispatch Status */}
+          {notification.dispatchStatus && notification.dispatchStatus.length > 0 && (
+            <div className="mt-3">
+              <NotificationDispatchStatus 
+                dispatchStatuses={notification.dispatchStatus}
+                showDetails={false}
+              />
+            </div>
+          )}
+
+          {/* Related entity info */}
+          {notification.relatedEntityId && notification.relatedEntityType && (
+            <div className="mt-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                {notification.relatedEntityType}: {notification.relatedEntityId.slice(0, 8)}...
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

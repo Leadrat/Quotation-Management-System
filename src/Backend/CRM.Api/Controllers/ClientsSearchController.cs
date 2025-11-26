@@ -48,7 +48,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("search")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> Search([FromQuery] SearchRequest req)
         {
             try
@@ -61,7 +61,8 @@ namespace CRM.Api.Controllers
                 // Build query object from request + user context
                 var user = HttpContext.User;
                 var isAdmin = user.IsInRole("Admin");
-                var role = isAdmin ? "Admin" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty);
+                var isManager = user.IsInRole("Manager");
+                var role = isAdmin ? "Admin" : (isManager ? "Manager" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty));
                 
                 // Try multiple claim types to find user ID
                 var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
@@ -82,7 +83,7 @@ namespace CRM.Api.Controllers
                     State = req.State,
                     StateCode = req.StateCode,
                     Gstin = req.Gstin,
-                    CreatedByUserId = isAdmin ? req.UserId : null,
+                    CreatedByUserId = (isAdmin || isManager) ? req.UserId : null,
                     CreatedDateFrom = req.CreatedDateFrom,
                     CreatedDateTo = req.CreatedDateTo,
                     UpdatedDateFrom = req.UpdatedDateFrom,
@@ -125,12 +126,13 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("search/suggestions")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> Suggestions([FromQuery] string term, [FromQuery] string type = "CompanyName", [FromQuery] int maxSuggestions = 10)
         {
             var user = HttpContext.User;
             var isAdmin = user.IsInRole("Admin");
-            var role = isAdmin ? "Admin" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty);
+            var isManager = user.IsInRole("Manager");
+            var role = isAdmin ? "Admin" : (isManager ? "Manager" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty));
             Guid.TryParse(user.Claims.FirstOrDefault(c => c.Type == "sub" || c.Type == "userId")?.Value, out var currentUserId);
 
             if (string.IsNullOrWhiteSpace(term) || term.Length < 2)
@@ -153,7 +155,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("search/filter-options")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> FilterOptions()
         {
             var cacheKey = "client-filter-options:v1";
@@ -177,7 +179,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpPost("search/save")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> SaveSearch([FromBody] SaveSearchBody body)
         {
             var user = HttpContext.User;
@@ -195,29 +197,31 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("search/saved")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetSaved([FromQuery] Guid? userId = null)
         {
             var user = HttpContext.User;
             var isAdmin = user.IsInRole("Admin");
+            var isManager = user.IsInRole("Manager");
             Guid.TryParse(user.Claims.FirstOrDefault(c => c.Type == "sub" || c.Type == "userId")?.Value, out var currentUserId);
 
             var handler = new GetSavedSearchesQueryHandler(_db);
             var list = await handler.Handle(new GetSavedSearchesQuery
             {
                 RequestorUserId = currentUserId,
-                IsAdmin = isAdmin,
+                IsAdmin = isAdmin || isManager,
                 UserId = userId
             });
             return Ok(new { success = true, data = list });
         }
 
         [HttpDelete("search/saved/{savedSearchId}")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> DeleteSaved([FromRoute] Guid savedSearchId)
         {
             var user = HttpContext.User;
             var isAdmin = user.IsInRole("Admin");
+            var isManager = user.IsInRole("Manager");
             Guid.TryParse(user.Claims.FirstOrDefault(c => c.Type == "sub" || c.Type == "userId")?.Value, out var currentUserId);
 
             var handler = new DeleteSavedSearchCommandHandler(_db);
@@ -225,13 +229,13 @@ namespace CRM.Api.Controllers
             {
                 SavedSearchId = savedSearchId,
                 UserId = currentUserId,
-                IsAdmin = isAdmin
+                IsAdmin = isAdmin || isManager
             });
             return Ok(new { success = true, message = "Saved search deleted successfully" });
         }
 
         [HttpGet("export")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> Export(
             [FromQuery] string? searchTerm,
             [FromQuery] string? city,
@@ -243,7 +247,8 @@ namespace CRM.Api.Controllers
         {
             var user = HttpContext.User;
             var isAdmin = user.IsInRole("Admin");
-            var role = isAdmin ? "Admin" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty);
+            var isManager = user.IsInRole("Manager");
+            var role = isAdmin ? "Admin" : (isManager ? "Manager" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty));
             Guid.TryParse(user.Claims.FirstOrDefault(c => c.Type == "sub" || c.Type == "userId")?.Value, out var currentUserId);
 
             var handler = new ExportClientsQueryHandler(_db);
@@ -254,7 +259,7 @@ namespace CRM.Api.Controllers
                 State = state,
                 StateCode = stateCode,
                 Gstin = gstin,
-                CreatedByUserId = isAdmin ? userId : null,
+                CreatedByUserId = (isAdmin || isManager) ? userId : null,
                 RequestorUserId = currentUserId,
                 RequestorRole = role,
                 Format = string.IsNullOrWhiteSpace(format) ? "csv" : format.ToLower(),

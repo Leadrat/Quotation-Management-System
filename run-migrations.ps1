@@ -5,14 +5,14 @@ $connectionString = "Host=postgresql-caa1dffb-o9d7d637a.database.cloud.ovh.net;P
 # SQL script content
 $sqlScript = @"
 -- Ensure __EFMigrationsHistory table exists
-CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
-    ""MigrationId"" VARCHAR(150) NOT NULL,
-    ""ProductVersion"" VARCHAR(32) NOT NULL,
-    CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY (""MigrationId"")
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" VARCHAR(150) NOT NULL,
+    "ProductVersion" VARCHAR(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
 );
 
 -- Insert all migration history records (mark as applied)
-INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
 SELECT * FROM (VALUES
     ('20251112_CreateRefreshTokensTable', '8.0.8'),
     ('20251112_CreateUsersTable', '8.0.8'),
@@ -29,11 +29,33 @@ SELECT * FROM (VALUES
     ('20251115232411_CreateNotificationPreferencesTable', '8.0.8'),
     ('20251115232412_CreateEmailNotificationLogTable', '8.0.8'),
     ('20251118100000_AddAdminConfigurationTables', '8.0.8')
-) AS v(""MigrationId"", ""ProductVersion"")
+) AS v("MigrationId", "ProductVersion")
 WHERE NOT EXISTS (
-    SELECT 1 FROM ""__EFMigrationsHistory"" 
-    WHERE ""__EFMigrationsHistory"".""MigrationId"" = v.""MigrationId""
+    SELECT 1 FROM "__EFMigrationsHistory" 
+    WHERE "__EFMigrationsHistory"."MigrationId" = v."MigrationId"
 );
+
+-- Spec 028: Ensure Payments table exists (idempotent)
+CREATE TABLE IF NOT EXISTS "Payments" (
+    "PaymentId" uuid PRIMARY KEY,
+    "QuotationId" uuid NOT NULL,
+    "PaymentGateway" text NOT NULL,
+    "PaymentReference" text NOT NULL,
+    "AmountPaid" numeric(18,2) NOT NULL,
+    "Currency" text NOT NULL,
+    "PaymentStatus" integer NOT NULL DEFAULT 0,
+    "PaymentDate" timestamptz NULL,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NOT NULL,
+    "FailureReason" text NULL,
+    "IsRefundable" boolean NOT NULL DEFAULT true,
+    "RefundAmount" numeric(18,2) NULL,
+    "RefundReason" text NULL,
+    "RefundDate" timestamptz NULL,
+    "Metadata" text NULL,
+    CONSTRAINT "FK_Payments_Quotations_QuotationId" FOREIGN KEY ("QuotationId") REFERENCES "Quotations" ("QuotationId") ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IX_Payments_QuotationId" ON "Payments" ("QuotationId");
 "@
 
 Write-Host "Step 1: Marking existing migrations as applied..."
@@ -58,6 +80,5 @@ if ($psqlPath) {
 }
 
 Write-Host "Step 2: Running remaining migrations..."
-Set-Location "src\Backend\CRM.Infrastructure"
-dotnet ef database update --startup-project ..\CRM.Api --context AppDbContext
+dotnet ef database update --project "src\Backend\CRM.Infrastructure\CRM.Infrastructure.csproj" --startup-project "src\Backend\CRM.Api\CRM.Api.csproj" --context AppDbContext
 

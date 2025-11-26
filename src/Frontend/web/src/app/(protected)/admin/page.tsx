@@ -47,7 +47,7 @@ export default function AdminConsolePage() {
   return (
     <>
       <PageBreadcrumb pageTitle="System Administration" />
-      
+
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">
           System Administration & Configuration
@@ -64,7 +64,7 @@ export default function AdminConsolePage() {
             href={feature.href}
             className="block"
           >
-            <ComponentCard className="hover:border-brand-500 transition-colors cursor-pointer h-full">
+            <ComponentCard title={feature.title} className="hover:border-brand-500 transition-colors cursor-pointer h-full">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
                   {feature.icon}

@@ -3,10 +3,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Common.Results;
 using CRM.Shared.DTOs;
 using Microsoft.EntityFrameworkCore;
+using CRM.Shared.Constants;
 
 namespace CRM.Application.Users.Queries.Handlers
 {
@@ -14,19 +16,28 @@ namespace CRM.Application.Users.Queries.Handlers
     {
         private readonly IAppDbContext _db;
         private readonly IMapper _mapper;
+        private readonly ITenantContext _tenantContext;
 
-        public GetAllUsersQueryHandler(IAppDbContext db, IMapper mapper)
+        public GetAllUsersQueryHandler(IAppDbContext db, IMapper mapper, ITenantContext tenantContext)
         {
             _db = db;
             _mapper = mapper;
+            _tenantContext = tenantContext;
         }
 
         public async Task<PagedResult<UserDto>> Handle(GetAllUsersQuery q)
         {
             var pageNumber = q.PageNumber < 1 ? 1 : q.PageNumber;
             var pageSize = q.PageSize > 100 ? 100 : (q.PageSize < 1 ? 10 : q.PageSize);
+            // Filter by current tenant (include NULL for legacy data)
+            var currentTenantId = _tenantContext.CurrentTenantId;
+            var query = _db.Users.AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.DeletedAt == null && 
+                    (u.Role.RoleName == "SuperAdmin" || u.TenantId == currentTenantId || u.TenantId == null));
 
-            var query = _db.Users.AsNoTracking().Where(u => u.DeletedAt == null);
+            // Exclude Client role users - only Admin, SalesRep, and Manager should be in Users management
+            query = query.Where(u => u.RoleId != RoleIds.Client);
 
             // Only Admin can list all users, others see only themselves
             var isAdmin = string.Equals(q.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);

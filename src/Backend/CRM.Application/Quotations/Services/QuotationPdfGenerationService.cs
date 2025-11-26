@@ -7,9 +7,12 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using CRM.Application.Common.Persistence;
 using CRM.Domain.Entities;
 using CRM.Application.CompanyDetails.Dtos;
 using CRM.Application.CompanyDetails.Services;
+using CRM.Application.QuotationTemplates.Services;
 using CRM.Shared.Config;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -24,19 +27,25 @@ namespace CRM.Application.Quotations.Services
         private readonly QuotationManagementSettings _settings;
         private readonly ICompanyDetailsService _companyDetailsService;
         private readonly IConfiguration _configuration;
+        private readonly IAppDbContext _db;
+        private readonly ITemplateProcessingService _templateProcessingService;
 
         public QuotationPdfGenerationService(
             IMemoryCache cache,
             ILogger<QuotationPdfGenerationService> logger,
             IOptions<QuotationManagementSettings> settings,
             ICompanyDetailsService companyDetailsService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IAppDbContext db,
+            ITemplateProcessingService templateProcessingService)
         {
             _cache = cache;
             _logger = logger;
             _settings = settings.Value;
             _companyDetailsService = companyDetailsService;
             _configuration = configuration;
+            _db = db;
+            _templateProcessingService = templateProcessingService;
         }
 
         public async Task<byte[]> GenerateQuotationPdfAsync(Quotation quotation)
@@ -49,7 +58,86 @@ namespace CRM.Application.Quotations.Services
                 return cachedPdf;
             }
 
-            _logger.LogInformation("Generating PDF for quotation {QuotationId}", quotation.QuotationId);
+            _logger.LogInformation("Generating PDF for quotation {QuotationId}. TemplateId: {TemplateId}", 
+                quotation.QuotationId, quotation.TemplateId?.ToString() ?? "null");
+
+            // If quotation was created from a template, use template processing
+            if (quotation.TemplateId.HasValue)
+            {
+                _logger.LogInformation("Quotation {QuotationId} was created from template {TemplateId}, attempting template processing", 
+                    quotation.QuotationId, quotation.TemplateId);
+                
+                // Ensure quotation has all required data loaded
+                var fullQuotation = await _db.Quotations
+                    .Include(q => q.Client)
+                    .Include(q => q.LineItems)
+                    .Include(q => q.CreatedByUser)
+                    .FirstOrDefaultAsync(q => q.QuotationId == quotation.QuotationId);
+                
+                if (fullQuotation == null)
+                {
+                    _logger.LogWarning("Quotation {QuotationId} not found in database, using provided quotation object", quotation.QuotationId);
+                    fullQuotation = quotation;
+                }
+                
+                var template = await _db.QuotationTemplates
+                    .FirstOrDefaultAsync(t => t.TemplateId == quotation.TemplateId.Value);
+                
+                if (template == null)
+                {
+                    _logger.LogError("Template {TemplateId} not found in database for quotation {QuotationId}, falling back to standard PDF", 
+                        quotation.TemplateId, quotation.QuotationId);
+                }
+                else if (!template.IsFileBased)
+                {
+                    _logger.LogWarning("Template {TemplateId} is not file-based (IsFileBased={IsFileBased}) for quotation {QuotationId}, using standard PDF generation", 
+                        template.TemplateId, template.IsFileBased, quotation.QuotationId);
+                }
+                else
+                {
+                    try
+                    {
+                        _logger.LogInformation("Processing template {TemplateId} (File: {FileName}, MimeType: {MimeType}) for quotation {QuotationId}", 
+                            template.TemplateId, template.FileName, template.MimeType, quotation.QuotationId);
+                        
+                        // Ensure line items ordered before processing
+                        if (fullQuotation.LineItems != null)
+                        {
+                            fullQuotation.LineItems = fullQuotation.LineItems
+                                .OrderBy(li => li.SequenceNumber)
+                                .ToList();
+                        }
+
+                        var templatePdfBytes = await _templateProcessingService.ProcessTemplateToPdfAsync(template, fullQuotation);
+                        
+                        _logger.LogInformation("Successfully generated PDF from template {TemplateId} for quotation {QuotationId}. PDF size: {Size} bytes", 
+                            template.TemplateId, quotation.QuotationId, templatePdfBytes.Length);
+                        
+                        // Cache the result
+                        var templateCacheDuration = GetCacheDuration();
+                        if (templateCacheDuration.HasValue)
+                        {
+                            var cacheOptions = new MemoryCacheEntryOptions
+                            {
+                                AbsoluteExpirationRelativeToNow = templateCacheDuration
+                            };
+                            _cache.Set(cacheKey, templatePdfBytes, cacheOptions);
+                        }
+                        
+                        return templatePdfBytes;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to process template {TemplateId} for quotation {QuotationId}. Error: {Error}. Stack trace: {StackTrace}. Falling back to standard PDF generation", 
+                            template.TemplateId, quotation.QuotationId, ex.Message, ex.StackTrace);
+                        // Fall through to standard PDF generation
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Quotation {QuotationId} has no TemplateId, using standard PDF generation", quotation.QuotationId);
+            }
 
             QuestPDF.Settings.License = LicenseType.Community;
 
@@ -627,7 +715,7 @@ namespace CRM.Application.Quotations.Services
         }
 
         private string BuildCacheKey(Quotation quotation) =>
-            $"quotation-pdf-{quotation.QuotationId}-{quotation.UpdatedAt:O}";
+            $"quotation-pdf-{quotation.QuotationId}-{quotation.TemplateId?.ToString() ?? "no-template"}-{quotation.UpdatedAt:O}";
 
         private TimeSpan? GetCacheDuration()
         {

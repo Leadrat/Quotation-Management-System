@@ -1,0 +1,156 @@
+openapi: 3.0.3
+info:
+  title: Import Templates API
+  version: 0.1.0
+components:
+  schemas:
+    ImportSession:
+      type: object
+      properties:
+        importSessionId: { type: string, format: uuid }
+        sourceType: { type: string, enum: [pdf, docx, xlsx, xslt, dotx] }
+        status: { type: string, enum: [Uploaded, Parsed, Mapped, Generated, Saved] }
+        suggestedMappingsJson: { type: string, nullable: true }
+        confirmedMappingsJson: { type: string, nullable: true }
+    ChatRequest:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+    ChatResponse:
+      type: object
+      properties:
+        reply: { type: string }
+    SaveMappingsRequest:
+      type: object
+      properties:
+        mappings: { type: object }
+      required: [mappings]
+    GenerateResponse:
+      type: object
+      properties:
+        previewPath: { type: string }
+    SaveTemplateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+    SaveTemplateResponse:
+      type: object
+      properties:
+        templateId: { type: string, format: uuid }
+paths:
+  /api/imports:
+    post:
+      summary: Upload and create an import session
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201': 
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportSession' }
+  /api/imports/{id}:
+    get:
+      summary: Get import session status and previews
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': 
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportSession' }
+  /api/imports/{id}/chat:
+    post:
+      summary: Send chat message for mapping guidance (Gemini backend)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+      responses:
+        '200': 
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+  /api/imports/{id}/mappings:
+    post:
+      summary: Save confirmed mappings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveMappingsRequest' }
+      responses:
+        '200': { description: OK }
+  /api/imports/{id}/generate:
+    post:
+      summary: Generate lookalike merge template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': 
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenerateResponse' }
+  /api/imports/{id}/preview:
+    get:
+      summary: Get preview of generated template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': 
+          description: OK
+          content:
+            text/plain:
+              schema: { type: string, format: binary }
+  /api/imports/{id}/save-template:
+    post:
+      summary: Save generated template to library
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveTemplateRequest' }
+      responses:
+        '201': 
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SaveTemplateResponse' }

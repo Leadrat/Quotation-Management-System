@@ -26,7 +26,9 @@ namespace CRM.Application.Payments.Queries.Handlers
             // Filter by user if provided (SalesRep sees own, Admin sees all)
             if (query.UserId.HasValue)
             {
+                // Temporarily disable tenant filter for debugging
                 var quotationIds = await _db.Quotations
+                    // .Where(q => q.CreatedByUserId == query.UserId.Value && (q.TenantId == currentTenantId || q.TenantId == null))
                     .Where(q => q.CreatedByUserId == query.UserId.Value)
                     .Select(q => q.QuotationId)
                     .ToListAsync();

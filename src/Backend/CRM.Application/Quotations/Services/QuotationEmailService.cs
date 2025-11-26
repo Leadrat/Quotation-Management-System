@@ -56,7 +56,6 @@ namespace CRM.Application.Quotations.Services
         public async Task SendQuotationEmailAsync(
             Quotation quotation,
             string recipientEmail,
-            byte[] pdfAttachment,
             string accessLink,
             List<string>? ccEmails = null,
             List<string>? bccEmails = null,
@@ -70,11 +69,6 @@ namespace CRM.Application.Quotations.Services
             if (string.IsNullOrWhiteSpace(recipientEmail))
             {
                 throw new ArgumentException("Recipient email cannot be null or empty.", nameof(recipientEmail));
-            }
-            
-            if (pdfAttachment == null || pdfAttachment.Length == 0)
-            {
-                throw new ArgumentException("PDF attachment cannot be null or empty.", nameof(pdfAttachment));
             }
             
             try
@@ -127,16 +121,6 @@ namespace CRM.Application.Quotations.Services
                         requestBody["bcc"] = bccEmails.ToArray();
                     }
 
-                    // Add PDF attachment
-                    requestBody["attachments"] = new[]
-                    {
-                        new Dictionary<string, object>
-                        {
-                            { "filename", $"Quotation-{quotation.QuotationNumber ?? "N/A"}.pdf" },
-                            { "content", Convert.ToBase64String(pdfAttachment) }
-                        }
-                    };
-
                     try
                     {
                         var jsonContent = JsonSerializer.Serialize(requestBody);
@@ -188,13 +172,6 @@ namespace CRM.Application.Quotations.Services
                             email.BCC(bcc);
                         }
                     }
-
-                    email.Attach(new Attachment
-                    {
-                        Filename = $"Quotation-{quotation.QuotationNumber ?? "N/A"}.pdf",
-                        Data = new MemoryStream(pdfAttachment),
-                        ContentType = "application/pdf"
-                    });
 
                     var response = await email.SendAsync();
 
@@ -447,7 +424,7 @@ namespace CRM.Application.Quotations.Services
         </div>
         <div class=""content"">
             <p>Dear {quotation.Client?.CompanyName ?? "Client"},</p>
-            <p>Your quotation is attached and ready for review.</p>
+            <p>Your quotation is ready for review. Please click the link below to view the complete quotation online.</p>
             {(string.IsNullOrWhiteSpace(customMessage) ? "" : $"<p>{customMessage}</p>")}
             <div class=""summary"">
                 <p><strong>Quotation Date:</strong> {quotation.QuotationDate:dd MMM yyyy}</p>
@@ -456,6 +433,7 @@ namespace CRM.Application.Quotations.Services
             </div>
             <a href=""{accessLink}"" class=""button"">View Quotation Online</a>
             <p>Please review and respond within {quotation.ValidUntil:dd MMM yyyy}.</p>
+            <p><em>Note: This quotation is available online through the secure link above. No PDF attachment is included for security reasons.</em></p>
         </div>
         <div class=""footer"">
             <p>Thank you for your business!</p>

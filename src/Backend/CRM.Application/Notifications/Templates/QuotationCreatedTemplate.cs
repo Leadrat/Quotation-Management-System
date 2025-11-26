@@ -5,12 +5,12 @@ namespace CRM.Application.Notifications.Services
 {
     public class QuotationCreatedTemplate : BaseNotificationTemplate
     {
-        public override string GetSubject(Notification notification)
+        public override string GetSubject(UserNotification notification)
         {
             return ReplacePlaceholders("New Quotation Created: {QuotationNumber}", notification);
         }
 
-        public override string GetBody(Notification notification)
+        public override string GetBody(UserNotification notification)
         {
             return ReplacePlaceholders(@"
                 <h2>New Quotation Created</h2>

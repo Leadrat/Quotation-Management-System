@@ -82,23 +82,10 @@ namespace CRM.Application.DiscountApprovals.Commands.Handlers
             Guid? approverUserId = null;
             if (approvalLevel == ApprovalLevel.Manager)
             {
-                // Find the requesting user's manager
-                var requester = await _db.Users
-                    .Include(u => u.ReportingManager)
-                    .FirstOrDefaultAsync(u => u.UserId == command.RequestedByUserId);
-
-                if (requester?.ReportingManagerId != null)
-                {
-                    approverUserId = requester.ReportingManagerId;
-                }
-                else
-                {
-                    // If no manager assigned, find any active manager
-                    var manager = await _db.Users
-                        .Where(u => u.RoleId == RoleIds.Manager && u.IsActive && u.DeletedAt == null)
-                        .FirstOrDefaultAsync();
-                    approverUserId = manager?.UserId;
-                }
+                // For Manager-level approvals, leave ApproverUserId as null
+                // This allows ALL managers to see and approve the request
+                // (Any manager can approve Manager-level requests)
+                approverUserId = null;
             }
             else // Admin
             {

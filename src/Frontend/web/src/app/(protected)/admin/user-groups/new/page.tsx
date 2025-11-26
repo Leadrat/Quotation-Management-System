@@ -21,7 +21,7 @@ export default function NewUserGroupPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Create User Group" />
+      <PageBreadcrumb pageTitle="Create User Group" />
       <ComponentCard>
         <h2 className="text-2xl font-bold text-black dark:text-white mb-6">Create New User Group</h2>
         <UserGroupForm

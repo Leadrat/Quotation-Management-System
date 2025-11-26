@@ -598,6 +598,9 @@ namespace CRM.Infrastructure.Migrations
                         .HasMaxLength(2)
                         .HasColumnType("character varying(2)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -612,6 +615,8 @@ namespace CRM.Infrastructure.Migrations
                     b.HasIndex("Gstin");
 
                     b.HasIndex("JurisdictionId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("UpdatedAt");
 
@@ -1293,6 +1298,52 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("DiscountApprovals", (string)null);
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.DocumentTemplate", b =>
+                {
+                    b.Property<Guid>("TemplateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TemplateType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("TemplateId");
+
+                    b.ToTable("DocumentTemplates");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.EmailNotificationLog", b =>
                 {
                     b.Property<Guid>("LogId")
@@ -1366,17 +1417,17 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("ConsumedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -1406,10 +1457,10 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("EffectiveDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("ExpiryDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("FromCurrencyCode")
                         .IsRequired()
@@ -1662,87 +1713,219 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("LocalizationResources", (string)null);
                 });
 
-            modelBuilder.Entity("CRM.Domain.Entities.Notification", b =>
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationAlert", b =>
                 {
-                    b.Property<Guid>("NotificationId")
+                    b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("ArchivedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("DeliveredChannels")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("DeliveryStatus")
+                    b.Property<string>("AlertType")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("SENT");
+                        .HasColumnType("text");
 
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<bool>("IsArchived")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsRead")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Message")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NotificationAlerts");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationChannelConfiguration", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Configuration")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("MaxRetryAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3);
+
+                    b.Property<TimeSpan>("RetryDelay")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("interval")
+                        .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Channel")
+                        .IsUnique();
+
+                    b.HasIndex("IsEnabled");
+
+                    b.ToTable("NotificationChannelConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationDispatchAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<DateTimeOffset>("AttemptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorDetails")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ExternalId")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("Meta")
-                        .HasColumnType("jsonb");
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
-                    b.Property<DateTimeOffset?>("ReadAt")
+                    b.Property<DateTimeOffset?>("NextRetryAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("RecipientUserId")
+                    b.Property<Guid>("NotificationId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("RelatedEntityId")
+                    b.Property<int?>("NotificationTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("NotificationTemplateId1")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttemptNumber");
+
+                    b.HasIndex("AttemptedAt");
+
+                    b.HasIndex("Channel");
+
+                    b.HasIndex("DeliveredAt");
+
+                    b.HasIndex("NotificationId");
+
+                    b.HasIndex("NotificationTemplateId");
+
+                    b.HasIndex("NotificationTemplateId1");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Status", "NextRetryAt");
+
+                    b.ToTable("NotificationDispatchAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationOperationLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("RelatedEntityType")
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Channel")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
-                    b.HasKey("NotificationId");
+                    b.Property<TimeSpan?>("Duration")
+                        .HasColumnType("interval");
 
-                    b.HasIndex("CreatedAt")
-                        .IsDescending();
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
 
-                    b.HasIndex("DeliveryStatus");
+                    b.Property<string>("Metadata")
+                        .HasColumnType("text");
 
-                    b.HasIndex("IsArchived");
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uuid");
 
-                    b.HasIndex("IsRead");
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.HasIndex("RecipientUserId");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.HasIndex("RecipientUserId", "IsRead")
-                        .HasFilter("\"IsRead\" = false");
+                    b.Property<DateTimeOffset>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.HasIndex("RelatedEntityType", "RelatedEntityId");
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.HasKey("Id");
+
+                    b.ToTable("NotificationOperationLogs");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.NotificationPreference", b =>
@@ -1769,6 +1952,110 @@ namespace CRM.Infrastructure.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("NotificationPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BodyTemplate")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequiredVariables")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("TemplateKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Variables")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventType")
+                        .HasDatabaseName("IX_NotificationTemplates_EventType");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_NotificationTemplates_IsActive");
+
+                    b.HasIndex("TemplateKey", "Channel")
+                        .IsUnique()
+                        .HasDatabaseName("IX_NotificationTemplates_TemplateKey_Channel");
+
+                    b.ToTable("NotificationTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationType", b =>
+                {
+                    b.Property<Guid>("NotificationTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("TypeName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("NotificationTypeId");
+
+                    b.HasIndex("TypeName")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_NotificationTypes_TypeName");
+
+                    b.ToTable("NotificationTypes", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.PasswordResetToken", b =>
@@ -1864,6 +2151,9 @@ namespace CRM.Infrastructure.Migrations
                     b.Property<string>("RefundReason")
                         .HasColumnType("text");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1879,6 +2169,8 @@ namespace CRM.Infrastructure.Migrations
                     b.HasIndex("PaymentStatus");
 
                     b.HasIndex("QuotationId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Payments", (string)null);
                 });
@@ -2228,7 +2520,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("QuotationDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("QuotationNumber")
                         .IsRequired()
@@ -2263,6 +2555,12 @@ namespace CRM.Infrastructure.Migrations
                     b.Property<Guid?>("TaxJurisdictionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("TemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(12,2)");
 
@@ -2270,7 +2568,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("ValidUntil")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("QuotationId");
 
@@ -2298,6 +2596,11 @@ namespace CRM.Infrastructure.Migrations
                     b.HasIndex("TaxFrameworkId");
 
                     b.HasIndex("TaxJurisdictionId");
+
+                    b.HasIndex("TemplateId")
+                        .HasFilter("\"TemplateId\" IS NOT NULL");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("ValidUntil");
 
@@ -2672,6 +2975,9 @@ namespace CRM.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("OriginalFileName")
+                        .HasColumnType("text");
+
                     b.Property<string>("OwnerRole")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -2684,6 +2990,15 @@ namespace CRM.Infrastructure.Migrations
 
                     b.Property<Guid?>("PreviousVersionId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ProcessingErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProcessingStatus")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TemplateFilePath")
+                        .HasColumnType("text");
 
                     b.Property<string>("TemplateType")
                         .HasMaxLength(50)
@@ -2725,11 +3040,11 @@ namespace CRM.Infrastructure.Migrations
                     b.HasIndex("IsApproved", "Visibility")
                         .HasFilter("[DeletedAt] IS NULL");
 
-                    b.HasIndex("Name", "OwnerUserId")
-                        .IsUnique()
+                    b.HasIndex("OwnerUserId", "Visibility")
                         .HasFilter("[DeletedAt] IS NULL");
 
-                    b.HasIndex("OwnerUserId", "Visibility")
+                    b.HasIndex("Name", "OwnerUserId", "Version")
+                        .IsUnique()
                         .HasFilter("[DeletedAt] IS NULL");
 
                     b.ToTable("QuotationTemplates", (string)null);
@@ -2784,19 +3099,19 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("LastUsedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("TokenJti")
                         .IsRequired()
@@ -2979,7 +3294,7 @@ namespace CRM.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
@@ -3009,7 +3324,7 @@ namespace CRM.Infrastructure.Migrations
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.HasKey("RoleId");
@@ -3402,6 +3717,93 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("TaxRates", (string)null);
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.TemplatePlaceholder", b =>
+                {
+                    b.Property<Guid>("PlaceholderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultValue")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsManuallyAdded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("OriginalText")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PlaceholderName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PlaceholderType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("PositionInDocument")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("QuotationTemplateTemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("PlaceholderId");
+
+                    b.HasIndex("QuotationTemplateTemplateId");
+
+                    b.HasIndex("TemplateId")
+                        .HasDatabaseName("IX_TemplatePlaceholders_TemplateId");
+
+                    b.HasIndex("TemplateId", "PlaceholderName")
+                        .IsUnique()
+                        .HasDatabaseName("IX_TemplatePlaceholders_TemplateId_PlaceholderName");
+
+                    b.HasIndex("TemplateId", "PlaceholderType")
+                        .HasDatabaseName("IX_TemplatePlaceholders_TemplateId_Type");
+
+                    b.ToTable("TemplatePlaceholders", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Tenant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Tenants");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -3417,13 +3819,13 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("character varying(500)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid?>("DelegateUserId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -3442,7 +3844,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("LastLoginAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("LastName")
                         .IsRequired()
@@ -3450,7 +3852,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime?>("LastSeenAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("LinkedInUrl")
                         .HasMaxLength(255)
@@ -3493,12 +3895,15 @@ namespace CRM.Infrastructure.Migrations
                     b.Property<string>("Skills")
                         .HasColumnType("jsonb");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TwitterUrl")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("UserId");
 
@@ -3521,9 +3926,143 @@ namespace CRM.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
+                    b.HasIndex("TenantId");
+
                     b.HasIndex("UpdatedAt");
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.UserNotification", b =>
+                {
+                    b.Property<Guid>("NotificationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("DeliveredChannels")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("DeliveryStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("PENDING");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<string>("Meta")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("NotificationTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RelatedEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelatedEntityType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SentVia")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("NotificationId");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_Notifications_CreatedAt");
+
+                    b.HasIndex("IsArchived")
+                        .HasDatabaseName("IX_Notifications_IsArchived");
+
+                    b.HasIndex("IsRead")
+                        .HasDatabaseName("IX_Notifications_IsRead");
+
+                    b.HasIndex("NotificationTypeId")
+                        .HasDatabaseName("IX_Notifications_NotificationTypeId");
+
+                    b.HasIndex("RecipientUserId")
+                        .HasDatabaseName("IX_Notifications_RecipientUserId");
+
+                    b.HasIndex("RelatedEntityId")
+                        .HasDatabaseName("IX_Notifications_RelatedEntityId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_Notifications_UserId");
+
+                    b.HasIndex("RecipientUserId", "IsArchived")
+                        .HasDatabaseName("IX_Notifications_RecipientUserId_IsArchived");
+
+                    b.HasIndex("RecipientUserId", "IsRead")
+                        .HasDatabaseName("IX_Notifications_RecipientUserId_IsRead");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("IX_Notifications_UserId_CreatedAt");
+
+                    b.HasIndex("UserId", "IsRead")
+                        .HasDatabaseName("IX_Notifications_UserId_IsRead");
+
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.UserPreferences", b =>
@@ -3597,7 +4136,7 @@ namespace CRM.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.HasKey("UserId", "RoleId");
@@ -3608,6 +4147,92 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("UserRoles", (string)null);
                 });
 
+            modelBuilder.Entity("CRM.Domain.Imports.ImportSession", b =>
+                {
+                    b.Property<Guid>("ImportSessionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConfirmedMappingsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SourceFileRef")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SuggestedMappingsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("ImportSessionId");
+
+                    b.ToTable("ImportSessions", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Imports.ImportedTemplate", b =>
+                {
+                    b.Property<Guid>("ImportedTemplateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentRef")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("ImportSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ImportedTemplateId");
+
+                    b.ToTable("ImportedTemplates", (string)null);
+                });
+
             modelBuilder.Entity("CRM.Domain.UserManagement.Mention", b =>
                 {
                     b.Property<Guid>("MentionId")
@@ -3615,7 +4240,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("EntityId")
                         .HasColumnType("uuid");
@@ -3660,10 +4285,10 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DueDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("EntityId")
                         .HasColumnType("uuid");
@@ -3677,7 +4302,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("AssignmentId");
 
@@ -3704,7 +4329,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -3725,7 +4350,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("TeamId");
 
@@ -3750,7 +4375,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("JoinedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -3799,7 +4424,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("character varying(45)");
 
                     b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UserAgent")
                         .IsRequired()
@@ -3828,7 +4453,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uuid");
@@ -3849,7 +4474,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasDefaultValue("[]");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("GroupId");
 
@@ -3867,7 +4492,7 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("AddedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
@@ -4047,7 +4672,15 @@ namespace CRM.Infrastructure.Migrations
                         .HasForeignKey("JurisdictionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("CRM.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ClientHistory", b =>
@@ -4217,7 +4850,7 @@ namespace CRM.Infrastructure.Migrations
 
             modelBuilder.Entity("CRM.Domain.Entities.EmailNotificationLog", b =>
                 {
-                    b.HasOne("CRM.Domain.Entities.Notification", "Notification")
+                    b.HasOne("CRM.Domain.Entities.UserNotification", "Notification")
                         .WithMany()
                         .HasForeignKey("NotificationId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -4316,15 +4949,27 @@ namespace CRM.Infrastructure.Migrations
                     b.Navigation("UpdatedByUser");
                 });
 
-            modelBuilder.Entity("CRM.Domain.Entities.Notification", b =>
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationDispatchAttempt", b =>
                 {
-                    b.HasOne("CRM.Domain.Entities.User", "RecipientUser")
+                    b.HasOne("CRM.Domain.Entities.UserNotification", "Notification")
                         .WithMany()
-                        .HasForeignKey("RecipientUserId")
+                        .HasForeignKey("NotificationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("RecipientUser");
+                    b.HasOne("CRM.Domain.Entities.NotificationTemplate", null)
+                        .WithMany("DispatchAttempts")
+                        .HasForeignKey("NotificationTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CRM.Domain.Entities.NotificationTemplate", "NotificationTemplate")
+                        .WithMany()
+                        .HasForeignKey("NotificationTemplateId1")
+                        .HasConstraintName("FK_NotificationDispatchAttempts_NotificationTemplates_Notific~1");
+
+                    b.Navigation("Notification");
+
+                    b.Navigation("NotificationTemplate");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.NotificationPreference", b =>
@@ -4357,7 +5002,15 @@ namespace CRM.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("CRM.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Quotation");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.PaymentGatewayConfig", b =>
@@ -4471,11 +5124,19 @@ namespace CRM.Infrastructure.Migrations
                         .HasForeignKey("TaxJurisdictionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("CRM.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Client");
 
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("PendingApproval");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.QuotationAccessLink", b =>
@@ -4757,6 +5418,21 @@ namespace CRM.Infrastructure.Migrations
                     b.Navigation("TaxFramework");
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.TemplatePlaceholder", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.QuotationTemplate", null)
+                        .WithMany("Placeholders")
+                        .HasForeignKey("QuotationTemplateTemplateId");
+
+                    b.HasOne("CRM.Domain.Entities.DocumentTemplate", "Template")
+                        .WithMany("Placeholders")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Template");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.User", b =>
                 {
                     b.HasOne("CRM.Domain.Entities.User", "DelegateUser")
@@ -4775,11 +5451,38 @@ namespace CRM.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("CRM.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("DelegateUser");
 
                     b.Navigation("ReportingManager");
 
                     b.Navigation("Role");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.UserNotification", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.NotificationType", "NotificationType")
+                        .WithMany("Notifications")
+                        .HasForeignKey("NotificationTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CRM.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("NotificationType");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.UserPreferences", b =>
@@ -4963,6 +5666,11 @@ namespace CRM.Infrastructure.Migrations
                     b.Navigation("TaxFramework");
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.DocumentTemplate", b =>
+                {
+                    b.Navigation("Placeholders");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.IdentifierType", b =>
                 {
                     b.Navigation("CountryIdentifierConfigurations");
@@ -4973,6 +5681,16 @@ namespace CRM.Infrastructure.Migrations
                     b.Navigation("ChildJurisdictions");
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationTemplate", b =>
+                {
+                    b.Navigation("DispatchAttempts");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.NotificationType", b =>
+                {
+                    b.Navigation("Notifications");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.Quotation", b =>
                 {
                     b.Navigation("LineItems");
@@ -4981,6 +5699,8 @@ namespace CRM.Infrastructure.Migrations
             modelBuilder.Entity("CRM.Domain.Entities.QuotationTemplate", b =>
                 {
                     b.Navigation("LineItems");
+
+                    b.Navigation("Placeholders");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Refund", b =>

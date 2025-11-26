@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { DiscountApprovalsApi } from "@/lib/api";
 import { DiscountApproval, ApprovalStatus } from "@/types/discount-approvals";
-import { ApprovalStatusBadge, ApprovalErrorBoundary, ApprovalListSkeleton } from "@/components/approvals";
+import { ApprovalStatusBadge, ApprovalErrorBoundary, ApprovalListSkeleton, ApprovalDetailModal } from "@/components/approvals";
 import { formatCurrency, formatDateTime } from "@/utils/quotationFormatter";
 import Button from "@/components/tailadmin/ui/button/Button";
 import { ApprovalDecisionModal } from "@/components/approvals/ApprovalDecisionModal";
@@ -38,6 +38,8 @@ export default function DiscountApprovalsDashboardPage() {
   const [decisionModalOpen, setDecisionModalOpen] = useState(false);
   const [selectedApprovalForDecision, setSelectedApprovalForDecision] = useState<DiscountApproval | null>(null);
   const [decisionType, setDecisionType] = useState<"approve" | "reject" | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedApprovalIdForDetail, setSelectedApprovalIdForDetail] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -61,10 +63,16 @@ export default function DiscountApprovalsDashboardPage() {
         requestedByUserId: requestedByFilter || undefined,
       };
 
+      console.log("Loading approvals with params:", params);
       const result = await DiscountApprovalsApi.getPending(params);
-      setApprovals(result.data.data || []);
-      setTotal(result.data.totalCount || 0);
+      console.log("Approvals API response:", result);
+      console.log("Approvals data:", result.data?.data);
+      console.log("Total count:", result.data?.totalCount);
+      
+      setApprovals(result.data?.data || []);
+      setTotal(result.data?.totalCount || 0);
     } catch (err: any) {
+      console.error("Error loading approvals:", err);
       setError(err.message || "Failed to load approvals");
     } finally {
       setLoading(false);
@@ -72,15 +80,23 @@ export default function DiscountApprovalsDashboardPage() {
   };
 
   const handleApprove = (approval: DiscountApproval) => {
+    console.log("Approve button clicked for approval:", approval.approvalId);
     setSelectedApprovalForDecision(approval);
     setDecisionType("approve");
     setDecisionModalOpen(true);
   };
 
   const handleReject = (approval: DiscountApproval) => {
+    console.log("Reject button clicked for approval:", approval.approvalId);
     setSelectedApprovalForDecision(approval);
     setDecisionType("reject");
     setDecisionModalOpen(true);
+  };
+
+  const handleView = (approval: DiscountApproval) => {
+    console.log("View button clicked for approval:", approval.approvalId);
+    setSelectedApprovalIdForDetail(approval.approvalId);
+    setDetailModalOpen(true);
   };
 
   const handleDecisionSubmit = async (reason: string, comments?: string) => {
@@ -313,16 +329,36 @@ export default function DiscountApprovalsDashboardPage() {
                       {formatDateTime(approval.requestDate)}
                     </TableCell>
                     <TableCell className="px-5 py-4">
-                      {approval.status === "Pending" && (
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" className="text-xs px-2 py-1 text-success-600 hover:text-success-700" onClick={() => handleApprove(approval)}>
-                            Approve
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-xs px-2 py-1 text-error-500 hover:text-error-600" onClick={() => handleReject(approval)}>
-                            Reject
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-xs px-2 py-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer !pointer-events-auto" 
+                          onClick={() => handleView(approval)}
+                        >
+                          View
+                        </Button>
+                        {approval.status === "Pending" && (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-xs px-2 py-1 text-success-600 hover:text-success-700 hover:bg-success-50 dark:hover:bg-success-900/20 cursor-pointer !pointer-events-auto" 
+                              onClick={() => handleApprove(approval)}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-xs px-2 py-1 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20 cursor-pointer !pointer-events-auto" 
+                              onClick={() => handleReject(approval)}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -358,6 +394,18 @@ export default function DiscountApprovalsDashboardPage() {
           approval={selectedApprovalForDecision}
           action={decisionType}
           onSubmit={handleDecisionSubmit}
+        />
+      )}
+
+      {/* Detail Modal */}
+      {detailModalOpen && selectedApprovalIdForDetail && (
+        <ApprovalDetailModal
+          isOpen={detailModalOpen}
+          onClose={() => {
+            setDetailModalOpen(false);
+            setSelectedApprovalIdForDetail(null);
+          }}
+          approvalId={selectedApprovalIdForDetail}
         />
       )}
     </ApprovalErrorBoundary>

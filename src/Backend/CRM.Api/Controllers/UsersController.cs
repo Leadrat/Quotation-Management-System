@@ -4,6 +4,7 @@ using CRM.Application.Users.Commands.Handlers;
 using CRM.Application.Users.Commands.Results;
 using CRM.Application.Users.Queries;
 using CRM.Application.Users.Queries.Handlers;
+using CRM.Application.Common.Interfaces;
 using CRM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using CRM.Api.Filters;
@@ -29,14 +30,16 @@ public class UsersController : ControllerBase
     private readonly IMapper _mapper;
     private readonly IEmailQueue _emails;
     private readonly IResetTokenGenerator _tokenGen;
+    private readonly ITenantContext _tenantContext;
 
-    public UsersController(AppDbContext db, IAuditLogger audit, IMapper mapper, IEmailQueue emails, IResetTokenGenerator tokenGen)
+    public UsersController(AppDbContext db, IAuditLogger audit, IMapper mapper, IEmailQueue emails, IResetTokenGenerator tokenGen, ITenantContext tenantContext)
     {
         _db = db;
         _audit = audit;
         _mapper = mapper;
         _emails = emails;
         _tokenGen = tokenGen;
+        _tenantContext = tenantContext;
     }
 
     [HttpGet]
@@ -57,7 +60,7 @@ public class UsersController : ControllerBase
             RequestorRole = role
         };
 
-        var handler = new GetAllUsersQueryHandler(_db, _mapper);
+        var handler = new GetAllUsersQueryHandler(_db, _mapper, _tenantContext);
         var result = await handler.Handle(query);
 
         return Ok(new
@@ -80,7 +83,7 @@ public class UsersController : ControllerBase
         cmd.CreatedByUserId = actorId;
 
         await _audit.LogAsync("admin_create_user_attempt", new { cmd.Email, cmd.RoleId });
-        var handler = new CreateUserCommandHandler(_db);
+        var handler = new CreateUserCommandHandler(_db, _tenantContext);
         var result = await handler.Handle(cmd);
         await _audit.LogAsync("admin_create_user_success", new { result.UserId, result.Email, result.RoleId });
         return Created(string.Empty, result);

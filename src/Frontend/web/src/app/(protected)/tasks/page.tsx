@@ -1,13 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { UserManagementApi } from "@/lib/api";
-import { getAccessToken } from "@/lib/session";
+import { getAccessToken, parseJwt } from "@/lib/session";
 import PageBreadcrumb from "@/components/tailadmin/common/PageBreadCrumb";
 import ComponentCard from "@/components/tailadmin/common/ComponentCard";
 import TaskCard from "@/components/user-management/TaskCard";
 import { TaskAssignment } from "@/types/userManagement";
 import Alert from "@/components/tailadmin/ui/alert/Alert";
-import { getAccessToken, parseJwt } from "@/lib/session";
 
 export default function TasksPage() {
   const [userId, setUserId] = useState<string>("");
@@ -70,8 +69,8 @@ export default function TasksPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="My Tasks" />
-        <ComponentCard>
+        <PageBreadcrumb pageTitle="My Tasks" />
+        <ComponentCard title="Task Assignments">
           <div className="text-center py-8">Loading tasks...</div>
         </ComponentCard>
       </div>
@@ -80,9 +79,9 @@ export default function TasksPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="My Tasks" />
-      
-      <ComponentCard>
+      <PageBreadcrumb pageTitle="My Tasks" />
+
+      <ComponentCard title="Task Assignments">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-black dark:text-white">Task Assignments</h2>
           <div className="flex gap-2">
@@ -158,4 +157,3 @@ export default function TasksPage() {
     </div>
   );
 }
-

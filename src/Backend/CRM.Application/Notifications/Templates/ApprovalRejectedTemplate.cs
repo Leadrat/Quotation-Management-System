@@ -5,12 +5,12 @@ namespace CRM.Application.Notifications.Services
 {
     public class ApprovalRejectedTemplate : BaseNotificationTemplate
     {
-        public override string GetSubject(Notification notification)
+        public override string GetSubject(UserNotification notification)
         {
             return ReplacePlaceholders("Discount Approval Rejected for Quotation {QuotationNumber}", notification);
         }
 
-        public override string GetBody(Notification notification)
+        public override string GetBody(UserNotification notification)
         {
             return ReplacePlaceholders(@"
                 <h2>Discount Approval Rejected</h2>

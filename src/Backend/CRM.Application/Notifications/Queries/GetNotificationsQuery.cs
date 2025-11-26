@@ -1,8 +1,11 @@
 using System;
+using CRM.Application.Common.Results;
+using CRM.Application.Notifications.Dtos;
+using MediatR;
 
 namespace CRM.Application.Notifications.Queries
 {
-    public class GetNotificationsQuery
+    public class GetNotificationsQuery : IRequest<PagedResult<NotificationDto>>
     {
         public bool? Unread { get; set; }
         public bool? Archived { get; set; }

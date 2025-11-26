@@ -1,16 +1,18 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Notifications.Dtos;
 using CRM.Application.Notifications.Queries;
 using CRM.Domain.Entities;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CRM.Application.Notifications.Queries.Handlers
 {
-    public class GetNotificationPreferencesQueryHandler
+    public class GetNotificationPreferencesQueryHandler : IRequestHandler<GetNotificationPreferencesQuery, NotificationPreferencesDto>
     {
         private readonly IAppDbContext _db;
         private readonly IMapper _mapper;
@@ -26,10 +28,10 @@ namespace CRM.Application.Notifications.Queries.Handlers
             _logger = logger;
         }
 
-        public async Task<NotificationPreferencesDto> Handle(GetNotificationPreferencesQuery query)
+        public async Task<NotificationPreferencesDto> Handle(GetNotificationPreferencesQuery query, CancellationToken cancellationToken)
         {
             var preference = await _db.NotificationPreferences
-                .FirstOrDefaultAsync(p => p.UserId == query.RequestorUserId);
+                .FirstOrDefaultAsync(p => p.UserId == query.RequestorUserId, cancellationToken);
 
             if (preference == null)
             {

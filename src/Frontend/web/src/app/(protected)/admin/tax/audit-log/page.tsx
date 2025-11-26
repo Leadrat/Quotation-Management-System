@@ -47,7 +47,7 @@ export default function TaxAuditLogPage() {
 
   return (
     <div>
-      <PageBreadcrumb pageName="Tax Audit Log" />
+      <PageBreadcrumb pageTitle="Tax Audit Log" />
       
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
         <div className="border-b border-stroke px-6.5 py-4 dark:border-strokedark">

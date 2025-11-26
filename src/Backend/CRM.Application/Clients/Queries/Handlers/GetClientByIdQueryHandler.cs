@@ -30,7 +30,10 @@ namespace CRM.Application.Clients.Queries.Handlers
             }
 
             var isAdmin = string.Equals(q.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin && entity.CreatedByUserId != q.RequestorUserId)
+            var isManager = string.Equals(q.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+            
+            // Admin and Manager can see all clients, SalesRep can only see their own
+            if (!isAdmin && !isManager && entity.CreatedByUserId != q.RequestorUserId)
             {
                 throw new CRM.Shared.Exceptions.UserNotActiveException("Cannot access other user's client");
             }

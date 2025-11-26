@@ -41,22 +41,20 @@ export function KPICard({ metric, icon }: KPICardProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-start justify-between mb-2">
+        <h4 className="font-bold text-gray-800 text-title-sm dark:text-white/90 flex items-center gap-2">
+          {metric.value} {metric.unit && <span className="text-sm font-normal">{metric.unit}</span>}
+          {metric.trend && <span className="mt-0.5">{getTrendIcon()}</span>}
+        </h4>
         {icon && (
           <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
             {icon}
           </div>
         )}
-        {metric.trend && (
-          <div className="flex items-center gap-1">{getTrendIcon()}</div>
-        )}
       </div>
       <div>
         <p className="text-sm text-gray-500 dark:text-gray-400">{metric.name}</p>
-        <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-          {metric.value} {metric.unit && <span className="text-sm font-normal">{metric.unit}</span>}
-        </h4>
         {metric.color && (
           <span className={`inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full ${getColorClass()}`}>
             {metric.color}

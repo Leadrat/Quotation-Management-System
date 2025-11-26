@@ -10,6 +10,7 @@ namespace CRM.Application.Quotations.Dtos
         public DateTime? ValidUntil { get; set; }
         public decimal DiscountPercentage { get; set; }
         public string? Notes { get; set; }
+        public Guid? TemplateId { get; set; } // Template used to create this quotation
         public List<CreateLineItemRequest> LineItems { get; set; } = new();
     }
 }

@@ -5,12 +5,12 @@ namespace CRM.Application.Notifications.Services
 {
     public class QuotationRejectedTemplate : BaseNotificationTemplate
     {
-        public override string GetSubject(Notification notification)
+        public override string GetSubject(UserNotification notification)
         {
             return ReplacePlaceholders("Quotation {QuotationNumber} Rejected by {ClientName}", notification);
         }
 
-        public override string GetBody(Notification notification)
+        public override string GetBody(UserNotification notification)
         {
             return ReplacePlaceholders(@"
                 <h2>Quotation Rejected</h2>

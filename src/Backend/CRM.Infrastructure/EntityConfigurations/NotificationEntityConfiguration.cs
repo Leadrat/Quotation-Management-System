@@ -2,77 +2,117 @@ using CRM.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace CRM.Infrastructure.EntityConfigurations
+namespace CRM.Infrastructure.EntityConfigurations;
+
+public class NotificationEntityConfiguration : IEntityTypeConfiguration<UserNotification>
 {
-    public class NotificationEntityConfiguration : IEntityTypeConfiguration<Notification>
+    public void Configure(EntityTypeBuilder<UserNotification> builder)
     {
-        public void Configure(EntityTypeBuilder<Notification> builder)
-        {
-            builder.ToTable("Notifications");
-            builder.HasKey(x => x.NotificationId);
-
-            builder.Property(x => x.RecipientUserId)
-                .IsRequired();
-
-            builder.Property(x => x.RelatedEntityType)
-                .IsRequired()
-                .HasMaxLength(50);
-
-            builder.Property(x => x.RelatedEntityId)
-                .IsRequired();
-
-            builder.Property(x => x.EventType)
-                .IsRequired()
-                .HasMaxLength(50);
-
-            builder.Property(x => x.Message)
-                .IsRequired()
-                .HasMaxLength(500);
-
-            builder.Property(x => x.IsRead)
-                .IsRequired()
-                .HasDefaultValue(false);
-
-            builder.Property(x => x.IsArchived)
-                .IsRequired()
-                .HasDefaultValue(false);
-
-            builder.Property(x => x.DeliveredChannels)
-                .HasMaxLength(255);
-
-            builder.Property(x => x.DeliveryStatus)
-                .IsRequired()
-                .HasMaxLength(50)
-                .HasDefaultValue("SENT");
-
-            builder.Property(x => x.CreatedAt)
-                .IsRequired()
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-            builder.Property(x => x.ReadAt);
-
-            builder.Property(x => x.ArchivedAt);
-
-            builder.Property(x => x.Meta)
-                .HasColumnType("jsonb");
-
-            // Relationships
-            builder.HasOne(x => x.RecipientUser)
-                .WithMany()
-                .HasForeignKey(x => x.RecipientUserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Indexes
-            builder.HasIndex(x => x.RecipientUserId);
-            builder.HasIndex(x => x.IsRead);
-            builder.HasIndex(x => x.IsArchived);
-            builder.HasIndex(x => new { x.RelatedEntityType, x.RelatedEntityId });
-            builder.HasIndex(x => x.DeliveryStatus);
-            builder.HasIndex(x => x.CreatedAt)
-                .IsDescending();
-            builder.HasIndex(x => new { x.RecipientUserId, x.IsRead })
-                .HasFilter("\"IsRead\" = false");
-        }
+        builder.ToTable("Notifications");
+        
+        builder.HasKey(n => n.NotificationId);
+        
+        builder.Property(n => n.NotificationId)
+            .HasDefaultValueSql("gen_random_uuid()");
+            
+        builder.Property(n => n.UserId)
+            .IsRequired();
+            
+        builder.Property(n => n.RecipientUserId)
+            .IsRequired();
+            
+        builder.Property(n => n.NotificationTypeId)
+            .IsRequired();
+            
+        builder.Property(n => n.EventType)
+            .IsRequired()
+            .HasMaxLength(100);
+            
+        builder.Property(n => n.Title)
+            .IsRequired()
+            .HasMaxLength(255);
+            
+        builder.Property(n => n.Message)
+            .IsRequired()
+            .HasMaxLength(10000);
+            
+        builder.Property(n => n.RelatedEntityType)
+            .HasMaxLength(100);
+            
+        builder.Property(n => n.IsRead)
+            .IsRequired()
+            .HasDefaultValue(false);
+            
+        builder.Property(n => n.IsArchived)
+            .IsRequired()
+            .HasDefaultValue(false);
+            
+        builder.Property(n => n.SentVia)
+            .IsRequired()
+            .HasMaxLength(100);
+            
+        builder.Property(n => n.DeliveredChannels)
+            .HasMaxLength(500);
+            
+        builder.Property(n => n.DeliveryStatus)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasDefaultValue("PENDING");
+            
+        builder.Property(n => n.Meta)
+            .HasMaxLength(4000);
+            
+        builder.Property(n => n.CreatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("NOW()");
+            
+        builder.Property(n => n.UpdatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("NOW()");
+            
+        // Relationships
+        builder.HasOne(n => n.User)
+            .WithMany()
+            .HasForeignKey(n => n.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        builder.HasOne(n => n.NotificationType)
+            .WithMany(nt => nt.Notifications)
+            .HasForeignKey(n => n.NotificationTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        // Indexes
+        builder.HasIndex(n => n.UserId)
+            .HasDatabaseName("IX_Notifications_UserId");
+            
+        builder.HasIndex(n => n.RecipientUserId)
+            .HasDatabaseName("IX_Notifications_RecipientUserId");
+            
+        builder.HasIndex(n => n.NotificationTypeId)
+            .HasDatabaseName("IX_Notifications_NotificationTypeId");
+            
+        builder.HasIndex(n => n.CreatedAt)
+            .HasDatabaseName("IX_Notifications_CreatedAt");
+            
+        builder.HasIndex(n => n.IsRead)
+            .HasDatabaseName("IX_Notifications_IsRead");
+            
+        builder.HasIndex(n => n.IsArchived)
+            .HasDatabaseName("IX_Notifications_IsArchived");
+            
+        builder.HasIndex(n => new { n.UserId, n.IsRead })
+            .HasDatabaseName("IX_Notifications_UserId_IsRead");
+            
+        builder.HasIndex(n => new { n.RecipientUserId, n.IsRead })
+            .HasDatabaseName("IX_Notifications_RecipientUserId_IsRead");
+            
+        builder.HasIndex(n => new { n.RecipientUserId, n.IsArchived })
+            .HasDatabaseName("IX_Notifications_RecipientUserId_IsArchived");
+            
+        builder.HasIndex(n => new { n.UserId, n.CreatedAt })
+            .HasDatabaseName("IX_Notifications_UserId_CreatedAt");
+            
+        builder.HasIndex(n => n.RelatedEntityId)
+            .HasDatabaseName("IX_Notifications_RelatedEntityId");
     }
 }
-

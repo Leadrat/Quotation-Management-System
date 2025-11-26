@@ -123,7 +123,7 @@ export function NotificationInbox({ onUnreadCountChange }: NotificationInboxProp
   };
 
   return (
-    <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+    <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h4 className="text-title-md2 font-bold text-black dark:text-white">Notifications</h4>

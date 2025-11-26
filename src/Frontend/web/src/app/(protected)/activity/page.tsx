@@ -57,8 +57,8 @@ export default function ActivityFeedPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="Activity Feed" />
-        <ComponentCard>
+        <PageBreadcrumb pageTitle="Activity Feed" />
+        <ComponentCard title="Activity Feed">
           <div className="text-center py-8">Loading activity feed...</div>
         </ComponentCard>
       </div>
@@ -67,9 +67,9 @@ export default function ActivityFeedPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Activity Feed" />
-      
-      <ComponentCard>
+      <PageBreadcrumb pageTitle="Activity Feed" />
+
+      <ComponentCard title="Activity Feed">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-black dark:text-white">Activity Feed</h2>
           <div className="flex gap-2">
@@ -103,9 +103,7 @@ export default function ActivityFeedPage() {
         </div>
 
         {error && (
-          <Alert color="danger" className="mb-4">
-            {error}
-          </Alert>
+          <Alert variant="error" title="Error" message={error} />
         )}
 
         <div className="rounded-lg border border-stroke bg-white dark:border-strokedark dark:bg-boxdark">
@@ -145,4 +143,3 @@ export default function ActivityFeedPage() {
     </div>
   );
 }
-

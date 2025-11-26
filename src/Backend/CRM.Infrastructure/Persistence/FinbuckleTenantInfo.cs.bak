@@ -1,0 +1,38 @@
+using System;
+using Finbuckle.MultiTenant;
+
+namespace CRM.Infrastructure.Persistence
+{
+    /// <summary>
+    /// Finbuckle tenant info class that maps to your Tenant entity.
+    /// This is used by Finbuckle to identify and resolve tenants.
+    /// </summary>
+    public class FinbuckleTenantInfo : ITenantInfo
+    {
+        /// <summary>
+        /// Internal ID (primary key in Tenants table).
+        /// </summary>
+        public string? Id { get; set; }
+
+        /// <summary>
+        /// Business identifier set by SuperAdmin (e.g., "default", "infosys", "tcs-mumbai").
+        /// This is the TenantId column in the Tenants table.
+        /// </summary>
+        public string? Identifier { get; set; }
+
+        /// <summary>
+        /// Display name of the tenant.
+        /// </summary>
+        public string? Name { get; set; }
+
+        /// <summary>
+        /// Connection string for this tenant (if using per-tenant databases in the future).
+        /// </summary>
+        public string? ConnectionString { get; set; }
+
+        /// <summary>
+        /// Whether this tenant is active.
+        /// </summary>
+        public bool IsActive { get; set; } = true;
+    }
+}

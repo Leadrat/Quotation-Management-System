@@ -96,7 +96,7 @@ export default function EditProductPage() {
   if (error && !product) {
     return (
       <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-        <PageBreadcrumb pageName="Edit Product" />
+        <PageBreadcrumb pageTitle="Edit Product" />
         <ComponentCard title="Error">
           <div className="rounded border border-red-500 bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-400">
             {error}
@@ -111,7 +111,7 @@ export default function EditProductPage() {
 
   return (
     <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-      <PageBreadcrumb pageName="Edit Product" />
+      <PageBreadcrumb pageTitle="Edit Product" />
       <ComponentCard
         title={`Edit Product: ${product?.productName || ""}`}
         action={

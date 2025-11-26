@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -35,6 +36,7 @@ namespace CRM.Api.Controllers
         private readonly GetQuotationAccessLinkQueryHandler _accessLinkHandler;
         private readonly IAppDbContext _db;
         private readonly IQuotationPdfGenerationService _pdfService;
+        private readonly Application.QuotationTemplates.Services.ITemplateProcessingService _templateProcessingService;
         private readonly IValidator<CreateQuotationRequest> _createValidator;
         private readonly IValidator<UpdateQuotationRequest> _updateValidator;
         private readonly IValidator<SendQuotationRequest> _sendValidator;
@@ -53,6 +55,7 @@ namespace CRM.Api.Controllers
             GetQuotationAccessLinkQueryHandler accessLinkHandler,
             IAppDbContext db,
             IQuotationPdfGenerationService pdfService,
+            Application.QuotationTemplates.Services.ITemplateProcessingService templateProcessingService,
             IValidator<CreateQuotationRequest> createValidator,
             IValidator<UpdateQuotationRequest> updateValidator,
             IValidator<SendQuotationRequest> sendValidator)
@@ -70,6 +73,7 @@ namespace CRM.Api.Controllers
             _accessLinkHandler = accessLinkHandler;
             _db = db;
             _pdfService = pdfService;
+            _templateProcessingService = templateProcessingService;
             _createValidator = createValidator;
             _updateValidator = updateValidator;
             _sendValidator = sendValidator;
@@ -89,11 +93,29 @@ namespace CRM.Api.Controllers
             try
             {
                 var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-                var role = User.FindFirstValue("role") ?? string.Empty;
+                var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
                 if (!Guid.TryParse(userIdClaim, out var requestorUserId))
                 {
                     return Unauthorized(new { error = "Invalid user token" });
+                }
+
+                // Convert DateTime parameters to UTC to avoid PostgreSQL timezone issues
+                DateTime? utcDateFrom = null;
+                DateTime? utcDateTo = null;
+                
+                if (dateFrom.HasValue)
+                {
+                    utcDateFrom = dateFrom.Value.Kind == DateTimeKind.Unspecified 
+                        ? DateTime.SpecifyKind(dateFrom.Value, DateTimeKind.Utc) 
+                        : dateFrom.Value.ToUniversalTime();
+                }
+                
+                if (dateTo.HasValue)
+                {
+                    utcDateTo = dateTo.Value.Kind == DateTimeKind.Unspecified 
+                        ? DateTime.SpecifyKind(dateTo.Value, DateTimeKind.Utc) 
+                        : dateTo.Value.ToUniversalTime();
                 }
 
                 var query = new GetAllQuotationsQuery
@@ -103,8 +125,8 @@ namespace CRM.Api.Controllers
                     ClientId = clientId,
                     CreatedByUserId = userId,
                     Status = status,
-                    DateFrom = dateFrom,
-                    DateTo = dateTo,
+                    DateFrom = utcDateFrom,
+                    DateTo = utcDateTo,
                     RequestorUserId = requestorUserId,
                     RequestorRole = role
                 };
@@ -115,17 +137,20 @@ namespace CRM.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                // Log full exception details for debugging
+                System.Diagnostics.Debug.WriteLine($"GetAllQuotations Error: {ex}");
+                return StatusCode(500, new { error = ex.Message, details = ex.ToString() });
             }
         }
 
         [HttpGet("{quotationId}")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetQuotationById(Guid quotationId)
         {
             try
             {
                 var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-                var role = User.FindFirstValue("role") ?? string.Empty;
+                var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
                 if (!Guid.TryParse(userIdClaim, out var requestorUserId))
                 {
@@ -158,12 +183,13 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("client/{clientId}")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetQuotationsByClient(Guid clientId)
         {
             try
             {
                 var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-                var role = User.FindFirstValue("role") ?? string.Empty;
+                var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
                 if (!Guid.TryParse(userIdClaim, out var requestorUserId))
                 {
@@ -371,6 +397,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("{quotationId}/status-history")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetStatusHistory(Guid quotationId)
         {
             if (!TryGetUserContext(out var userId, out var role))
@@ -401,6 +428,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("{quotationId}/response")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetResponse(Guid quotationId)
         {
             if (!TryGetUserContext(out var userId, out var role))
@@ -433,6 +461,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpGet("{quotationId}/access-link")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetAccessLink(Guid quotationId)
         {
             if (!TryGetUserContext(out var userId, out var role))
@@ -464,7 +493,61 @@ namespace CRM.Api.Controllers
             }
         }
 
+        [HttpGet("{quotationId:guid}/template-preview")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
+        public async Task<IActionResult> GetQuotationTemplatePreview(Guid quotationId)
+        {
+            try
+            {
+                if (!TryGetUserContext(out var userId, out var role))
+                {
+                    return Unauthorized(new { error = "Invalid user token" });
+                }
+
+                var quotation = await _db.Quotations
+                    .Include(q => q.Client)
+                    .Include(q => q.CreatedByUser)
+                    .Include(q => q.LineItems)
+                    .FirstOrDefaultAsync(q => q.QuotationId == quotationId);
+
+                if (quotation == null)
+                {
+                    return NotFound(new { error = "Quotation not found" });
+                }
+
+                var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+                var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+
+                if (!isAdmin && !isManager && quotation.CreatedByUserId != userId)
+                {
+                    return Forbid("You do not have permission to view this quotation's template preview.");
+                }
+
+                if (!quotation.TemplateId.HasValue)
+                {
+                    return Ok(new { success = true, data = new { hasTemplate = false, message = "No template applied to this quotation." } });
+                }
+
+                var template = await _db.QuotationTemplates
+                    .FirstOrDefaultAsync(t => t.TemplateId == quotation.TemplateId.Value);
+
+                if (template == null || !template.IsFileBased)
+                {
+                    return Ok(new { success = true, data = new { hasTemplate = false, message = "Applied template not found or is not file-based." } });
+                }
+
+                var htmlContent = await _templateProcessingService.ProcessTemplateToHtmlAsync(template, quotation);
+
+                return Ok(new { success = true, data = new { hasTemplate = true, templateName = template.Name, content = htmlContent } });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Failed to get template preview", details = ex.Message });
+            }
+        }
+
         [HttpGet("{quotationId}/download-pdf")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> DownloadPdf(Guid quotationId)
         {
             if (!TryGetUserContext(out var userId, out var role))
@@ -485,7 +568,10 @@ namespace CRM.Api.Controllers
                 return NotFound(new { error = "Quotation not found" });
             }
 
-            if (!isAdmin && quotation.CreatedByUserId != userId)
+            var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+            
+            // Admin and Manager can view all quotations, SalesRep can only view their own
+            if (!isAdmin && !isManager && quotation.CreatedByUserId != userId)
             {
                 return Forbid("You do not have permission to access this quotation.");
             }
@@ -493,6 +579,61 @@ namespace CRM.Api.Controllers
             var pdfBytes = await _pdfService.GenerateQuotationPdfAsync(quotation);
             var fileName = $"Quotation-{quotation.QuotationNumber}.pdf";
             return File(pdfBytes, "application/pdf", fileName);
+        }
+
+        [HttpGet("{quotationId}/download-docx")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
+        public async Task<IActionResult> DownloadDocx(Guid quotationId)
+        {
+            if (!TryGetUserContext(out var userId, out var role))
+            {
+                return Unauthorized(new { error = "Invalid user token" });
+            }
+
+            var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+            var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+
+            var quotation = await _db.Quotations
+                .Include(q => q.Client)
+                .Include(q => q.CreatedByUser)
+                .Include(q => q.LineItems)
+                .FirstOrDefaultAsync(q => q.QuotationId == quotationId);
+
+            if (quotation == null)
+            {
+                return NotFound(new { error = "Quotation not found" });
+            }
+
+            // Admin and Manager can view all quotations, SalesRep can only view their own
+            if (!isAdmin && !isManager && quotation.CreatedByUserId != userId)
+            {
+                return Forbid("You do not have permission to access this quotation.");
+            }
+
+            byte[] docxBytes;
+            if (quotation.TemplateId.HasValue)
+            {
+                var template = await _db.QuotationTemplates
+                    .FirstOrDefaultAsync(t => t.TemplateId == quotation.TemplateId.Value);
+
+                if (template != null && template.IsFileBased && (
+                    (template.MimeType != null && template.MimeType.Contains("word", StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(template.FileName) && (template.FileName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) || template.FileName.EndsWith(".doc", StringComparison.OrdinalIgnoreCase)))))
+                {
+                    docxBytes = await _templateProcessingService.ProcessTemplateToDocxAsync(template, quotation);
+                }
+                else
+                {
+                    docxBytes = await _templateProcessingService.GenerateQuotationDocxAsync(quotation);
+                }
+            }
+            else
+            {
+                docxBytes = await _templateProcessingService.GenerateQuotationDocxAsync(quotation);
+            }
+
+            var fileName = $"Quotation-{quotation.QuotationNumber}.docx";
+            return File(docxBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileName);
         }
 
         [HttpPost]
@@ -598,6 +739,7 @@ namespace CRM.Api.Controllers
         }
 
         [HttpPut("{quotationId}")]
+        [Authorize(Roles = "SalesRep")]
         public async Task<IActionResult> UpdateQuotation(Guid quotationId, [FromBody] UpdateQuotationRequest request)
         {
             try
@@ -609,7 +751,7 @@ namespace CRM.Api.Controllers
                 }
 
                 var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-                var role = User.FindFirstValue("role") ?? string.Empty;
+                var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
                 if (!Guid.TryParse(userIdClaim, out var updatedByUserId))
                 {
@@ -647,12 +789,13 @@ namespace CRM.Api.Controllers
         }
 
         [HttpDelete("{quotationId}")]
+        [Authorize(Roles = "SalesRep")]
         public async Task<IActionResult> DeleteQuotation(Guid quotationId)
         {
             try
             {
                 var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-                var role = User.FindFirstValue("role") ?? string.Empty;
+                var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
                 if (!Guid.TryParse(userIdClaim, out var deletedByUserId))
                 {

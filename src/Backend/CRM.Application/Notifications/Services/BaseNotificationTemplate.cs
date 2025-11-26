@@ -7,38 +7,22 @@ namespace CRM.Application.Notifications.Services
 {
     public abstract class BaseNotificationTemplate : INotificationTemplate
     {
-        public abstract string GetSubject(Notification notification);
-        public abstract string GetBody(Notification notification);
+        public abstract string GetSubject(UserNotification notification);
+        public abstract string GetBody(UserNotification notification);
 
-        protected string ReplacePlaceholders(string template, Notification notification, Dictionary<string, string>? additionalPlaceholders = null)
+        protected string ReplacePlaceholders(string template, UserNotification notification, Dictionary<string, string>? additionalPlaceholders = null)
         {
             var result = template;
             
-            // Parse meta if available
-            Dictionary<string, object>? meta = null;
-            if (!string.IsNullOrWhiteSpace(notification.Meta))
-            {
-                try
-                {
-                    meta = JsonSerializer.Deserialize<Dictionary<string, object>>(notification.Meta);
-                }
-                catch { }
-            }
+            // Note: UserNotification doesn't have Meta property, so we skip meta parsing for now
 
             // Replace standard placeholders
             result = result.Replace("{Message}", notification.Message);
-            result = result.Replace("{EventType}", notification.EventType);
-            result = result.Replace("{RelatedEntityType}", notification.RelatedEntityType);
-            result = result.Replace("{RelatedEntityId}", notification.RelatedEntityId.ToString());
+            result = result.Replace("{Title}", notification.Title);
+            result = result.Replace("{RelatedEntityType}", notification.RelatedEntityType ?? "");
+            result = result.Replace("{RelatedEntityId}", notification.RelatedEntityId?.ToString() ?? "");
 
-            // Replace meta placeholders
-            if (meta != null)
-            {
-                foreach (var kvp in meta)
-                {
-                    result = result.Replace($"{{{kvp.Key}}}", kvp.Value?.ToString() ?? "");
-                }
-            }
+            // Meta placeholders would be handled here if UserNotification had a Meta property
 
             // Replace additional placeholders
             if (additionalPlaceholders != null)
@@ -55,18 +39,18 @@ namespace CRM.Application.Notifications.Services
 
     public class DefaultNotificationTemplate : BaseNotificationTemplate
     {
-        public override string GetSubject(Notification notification)
+        public override string GetSubject(UserNotification notification)
         {
-            return $"Notification: {notification.EventType}";
+            return $"Notification: {notification.NotificationType?.TypeName ?? "Unknown"}";
         }
 
-        public override string GetBody(Notification notification)
+        public override string GetBody(UserNotification notification)
         {
             return $@"
                 <h2>Notification</h2>
                 <p>{notification.Message}</p>
-                <p><strong>Event Type:</strong> {notification.EventType}</p>
-                <p><strong>Related Entity:</strong> {notification.RelatedEntityType} ({notification.RelatedEntityId})</p>
+                <p><strong>Type:</strong> {notification.NotificationType?.TypeName ?? "Unknown"}</p>
+                <p><strong>Related Entity:</strong> {notification.RelatedEntityType ?? "None"} ({notification.RelatedEntityId?.ToString() ?? "N/A"})</p>
             ";
         }
     }

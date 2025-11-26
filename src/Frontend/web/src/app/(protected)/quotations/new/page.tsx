@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { QuotationsApi, ClientsApi, TemplatesApi, TaxCalculationApi, ProductsApi } from "@/lib/api";
+import { QuotationsApi, ClientsApi, TemplatesApi, TaxCalculationApi } from "@/lib/api";
 import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { calculateQuotationTotals } from "@/utils/taxCalculator";
 import { formatCurrency } from "@/utils/quotationFormatter";
@@ -11,9 +11,7 @@ import { useToast, ToastContainer } from "@/components/quotations/Toast";
 import { ApplyTemplateModal } from "@/components/templates";
 import { ApprovalSubmissionModal } from "@/components/approvals";
 import TaxCalculationPreview from "@/components/tax/TaxCalculationPreview";
-import ProductSelector from "@/components/products/ProductSelector";
 import type { QuotationTemplate } from "@/types/templates";
-import type { ProductCatalogItem, BillingCycle } from "@/types/products";
 
 interface LineItem {
   lineItemId: string;
@@ -36,14 +34,14 @@ export default function CreateQuotationPage() {
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
 
-  // Check role on mount - redirect admin
+  // Check role on mount - redirect admin and manager
   useEffect(() => {
     const token = getAccessToken();
     const userRole = getRoleFromToken(token);
     setRole(userRole);
 
-    // Admin cannot create quotations - redirect to quotations list
-    if (userRole === "Admin") {
+    // Admin and Manager cannot create quotations - redirect to quotations list
+    if (userRole === "Admin" || userRole === "Manager") {
       router.replace("/quotations");
     }
   }, [router]);
@@ -66,12 +64,15 @@ export default function CreateQuotationPage() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [createdQuotationId, setCreatedQuotationId] = useState<string | null>(null);
-  const [showProductSelector, setShowProductSelector] = useState(false);
   const [quotationId, setQuotationId] = useState<string | null>(null);
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null); // Track template used
   const toast = useToast();
 
   const requiresApproval = discountPercentage >= 10;
   const approvalThreshold = discountPercentage >= 20 ? 20 : 10;
+
+  // Ensure date strings are in 'YYYY-MM-DD' for HTML date inputs
+  const toDateOnly = (s: string) => (s && s.includes("T") ? s.split("T")[0] : s);
 
   useEffect(() => {
     // Load clients for dropdown
@@ -129,46 +130,6 @@ export default function CreateQuotationPage() {
     }
   };
 
-  const handleProductSelected = async (product: ProductCatalogItem, quantity: number, billingCycle?: BillingCycle, hours?: number) => {
-    try {
-      setLoading(true);
-      
-      // Calculate price for the product
-      const priceRes = await ProductsApi.calculatePrice({
-        productId: product.productId,
-        quantity: quantity,
-        billingCycle: billingCycle,
-        hours: hours,
-      });
-
-      // API returns { success: true, data: { unitRate, subtotal, currency, breakdown } }
-      const unitRate = priceRes.data?.unitRate || 0;
-      const subtotal = priceRes.data?.subtotal || (unitRate * quantity);
-
-      // Add product as a new line item
-      const newLineItem: LineItem = {
-        lineItemId: crypto.randomUUID(),
-        itemName: product.productName,
-        description: product.description || "",
-        quantity: quantity,
-        unitRate: unitRate,
-        amount: subtotal,
-        productId: product.productId,
-        billingCycle: billingCycle,
-        hours: hours,
-        taxCategoryId: product.categoryId, // Use product category as tax category
-      };
-
-      setLineItems([...lineItems, newLineItem]);
-      setShowProductSelector(false);
-      toast.success("Product added to quotation");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to add product to quotation");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleApplyTemplate = async (template: QuotationTemplate) => {
     if (!selectedClientId) {
       toast.error("Please select a client first");
@@ -180,8 +141,8 @@ export default function CreateQuotationPage() {
       const appliedData = result.data;
 
       // Apply template data to form
-      if (appliedData.quotationDate) setQuotationDate(appliedData.quotationDate);
-      if (appliedData.validUntil) setValidUntil(appliedData.validUntil);
+      if (appliedData.quotationDate) setQuotationDate(toDateOnly(appliedData.quotationDate));
+      if (appliedData.validUntil) setValidUntil(toDateOnly(appliedData.validUntil));
       setDiscountPercentage(appliedData.discountPercentage || 0);
       if (appliedData.notes) setNotes(appliedData.notes);
 
@@ -196,6 +157,9 @@ export default function CreateQuotationPage() {
         productServiceCategoryId: item.productServiceCategoryId,
       }));
       setLineItems(newLineItems);
+
+      // Store template ID for later use when creating quotation
+      setAppliedTemplateId(template.templateId);
 
       toast.success(`Template "${template.name}" applied successfully!`);
       setShowTemplateModal(false);
@@ -231,6 +195,7 @@ export default function CreateQuotationPage() {
         validUntil,
         discountPercentage,
         notes: notes || undefined,
+        templateId: appliedTemplateId || undefined, // Include template ID if template was applied
         lineItems: lineItems.map((item) => ({
           itemName: item.itemName,
           description: item.description || undefined,
@@ -302,7 +267,7 @@ export default function CreateQuotationPage() {
   if (initialLoading) {
     return (
       <QuotationErrorBoundary>
-        <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+        <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
           <QuotationFormSkeleton />
         </div>
       </QuotationErrorBoundary>
@@ -311,7 +276,7 @@ export default function CreateQuotationPage() {
 
   return (
     <QuotationErrorBoundary>
-      <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+      <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
         <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <div className="mb-6">
         <h4 className="text-title-md2 font-bold text-black dark:text-white">Create Quotation</h4>
@@ -328,11 +293,11 @@ export default function CreateQuotationPage() {
         <div>
           <div className="mb-2.5 flex items-center justify-between">
             <label className="block text-black dark:text-white">Client *</label>
-            {selectedClientId && (
+            {selectedClientId && (role === "Admin" || role === "SalesRep") && (
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(true)}
-                className="rounded bg-blue-500 px-4 py-2 text-sm text-black dark:text-white border-2 border-blue-500 hover:bg-opacity-90"
+                className="rounded border-2 border-blue-500 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-blue-50 dark:bg-boxdark dark:border-blue-500 dark:text-white dark:hover:bg-blue-900/20"
               >
                 Apply Template
               </button>
@@ -435,32 +400,14 @@ export default function CreateQuotationPage() {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <label className="block text-black dark:text-white">Line Items *</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowProductSelector(true)}
-                className="rounded bg-brand-500 px-4 py-2 text-sm text-white hover:bg-brand-600"
-              >
-                Add from Catalog
-              </button>
-              <button
-                type="button"
-                onClick={addLineItem}
-                className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
-              >
-                Add Line Item
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={addLineItem}
+              className="rounded border border-blue-500 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-blue-50 dark:bg-boxdark dark:border-blue-500 dark:text-white dark:hover:bg-blue-900/20"
+            >
+              Add Line Item
+            </button>
           </div>
-          
-          {showProductSelector && (
-            <div className="mb-4 rounded-lg border border-stroke bg-white p-4 dark:border-strokedark dark:bg-form-input">
-              <ProductSelector
-                onProductSelected={handleProductSelected}
-                disabled={loading}
-              />
-            </div>
-          )}
           <div className="space-y-4">
             {lineItems.map((item, index) => (
               <div key={index} className="rounded border border-stroke p-4 dark:border-strokedark">
@@ -536,7 +483,7 @@ export default function CreateQuotationPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            className="w-full rounded-lg border-2 border-gray-300 bg-white px-5 py-3 text-base font-normal text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border-2 border-gray-300 bg-white px-5 py-3 text-base font-normal text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
             placeholder="Add any additional notes or comments here..."
             style={{ color: '#111827' }}
           />

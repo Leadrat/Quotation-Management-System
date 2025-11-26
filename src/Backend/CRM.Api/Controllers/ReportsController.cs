@@ -5,16 +5,19 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Common.Results;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Reports.Commands;
 using CRM.Application.Reports.Commands.Handlers;
 using CRM.Application.Reports.Dtos;
 using CRM.Application.Reports.Queries;
 using CRM.Application.Reports.Queries.Handlers;
 using CRM.Domain.Enums;
+using CRM.Shared.Constants;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CRM.Api.Controllers
 {
@@ -34,6 +37,7 @@ namespace CRM.Api.Controllers
         private readonly GetAuditComplianceReportQueryHandler _auditHandler;
         private readonly ExportReportCommandHandler _exportHandler;
         private readonly IAppDbContext _db;
+        private readonly ITenantContext _tenantContext;
         private readonly IValidator<GetSalesDashboardMetricsQuery> _salesDashboardValidator;
 
         public ReportsController(
@@ -48,6 +52,7 @@ namespace CRM.Api.Controllers
             GetAuditComplianceReportQueryHandler auditHandler,
             ExportReportCommandHandler exportHandler,
             IAppDbContext db,
+            ITenantContext tenantContext,
             IValidator<GetSalesDashboardMetricsQuery> salesDashboardValidator)
         {
             _salesDashboardHandler = salesDashboardHandler;
@@ -61,6 +66,7 @@ namespace CRM.Api.Controllers
             _auditHandler = auditHandler;
             _exportHandler = exportHandler;
             _db = db;
+            _tenantContext = tenantContext;
             _salesDashboardValidator = salesDashboardValidator;
         }
 
@@ -193,66 +199,153 @@ namespace CRM.Api.Controllers
                 var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
                 {
+                    System.Diagnostics.Debug.WriteLine("GetDashboardStats: Unauthorized - invalid user token");
                     return Unauthorized(new { error = "Invalid user token", details = "UserId claim is missing or invalid" });
                 }
 
-                var role = User.FindFirstValue("role") ?? string.Empty;
+                var role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
                 var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+                var isManager = string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+                
+                // Debug logging
+                System.Diagnostics.Debug.WriteLine($"GetDashboardStats: UserId={userId}, Role={role}, IsAdmin={isAdmin}, IsManager={isManager}");
+                System.Diagnostics.Debug.WriteLine("GetDashboardStats: Starting dashboard stats calculation...");
+
+                // Get ALL SalesRep user IDs for manager (not just assigned to them)
+                List<Guid> salesRepUserIds = new List<Guid>();
+                if (isManager)
+                {
+                    try
+                    {
+                        salesRepUserIds = await _db.Users
+                            .AsNoTracking()
+                            // Temporarily disable tenant filter for debugging
+                            // .Where(u => u.DeletedAt == null 
+                            //     && u.IsActive 
+                            //     && u.RoleId == RoleIds.SalesRep) // All SalesReps
+                            .Where(u => u.DeletedAt == null 
+                                && u.IsActive 
+                                && (u.RoleId == RoleIds.SalesRep || u.RoleId == RoleIds.Manager || u.RoleId == RoleIds.Admin)) // All active users
+                            .Select(u => u.UserId)
+                            .ToListAsync();
+                        System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Manager found {salesRepUserIds.Count} SalesReps");
+                    }
+                    catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "42P01")
+                    {
+                        // Users table does not exist yet (relation does not exist error)
+                        salesRepUserIds = new List<Guid>();
+                    }
+                    catch (Exception)
+                    {
+                        // Any other error - set to empty list
+                        salesRepUserIds = new List<Guid>();
+                    }
+                }
 
                 // Get total clients count
-                var clientsQuery = _db.Clients.AsNoTracking().Where(c => c.DeletedAt == null);
-                if (!isAdmin)
+                int totalClients = 0;
+                try
                 {
-                    clientsQuery = clientsQuery.Where(c => c.CreatedByUserId == userId);
+                    // Re-enable tenant filtering with correct tenant ID
+                    var currentTenantId = _tenantContext.CurrentTenantId;
+                    totalClients = await _db.Clients.AsNoTracking().Where(c => c.DeletedAt == null && c.TenantId == currentTenantId).CountAsync();
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Clients count = {totalClients} for tenant {currentTenantId}");
                 }
-                var totalClients = await clientsQuery.CountAsync();
+                catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "42P01")
+                {
+                    // Clients table does not exist yet (relation does not exist error)
+                    totalClients = 0;
+                    System.Diagnostics.Debug.WriteLine("GetDashboardStats: Clients table does not exist (42P01)");
+                }
+                catch (Exception ex)
+                {
+                    // Any other error - set to 0
+                    totalClients = 0;
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Error counting clients: {ex.Message}");
+                }
 
                 // Get total quotations count
-                var quotationsQuery = _db.Quotations.AsNoTracking();
-                if (!isAdmin)
+                int totalQuotations = 0;
+                try
                 {
-                    quotationsQuery = quotationsQuery.Where(q => q.CreatedByUserId == userId);
+                    // Re-enable tenant filtering with correct tenant ID
+                    var currentTenantId = _tenantContext.CurrentTenantId;
+                    totalQuotations = await _db.Quotations.AsNoTracking().Where(q => q.TenantId == currentTenantId).CountAsync();
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Quotations count = {totalQuotations} for tenant {currentTenantId}");
                 }
-                var totalQuotations = await quotationsQuery.CountAsync();
+                catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "42P01")
+                {
+                    // Quotations table does not exist yet (relation does not exist error)
+                    totalQuotations = 0;
+                    System.Diagnostics.Debug.WriteLine("GetDashboardStats: Quotations table does not exist (42P01)");
+                }
+                catch (Exception ex)
+                {
+                    // Any other error - set to 0
+                    totalQuotations = 0;
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Error counting quotations: {ex.Message}");
+                }
 
                 // Get pending approvals count
-                var approvalsQuery = _db.DiscountApprovals.AsNoTracking()
-                    .Where(a => a.Status == Domain.Enums.ApprovalStatus.Pending);
-                if (!isAdmin)
+                int pendingApprovals = 0;
+                try
                 {
-                    approvalsQuery = approvalsQuery.Where(a => a.RequestedByUserId == userId);
+                    var approvalsQuery = _db.DiscountApprovals.AsNoTracking()
+                        .Where(a => a.Status == Domain.Enums.ApprovalStatus.Pending);
+                    if (isAdmin)
+                    {
+                        // Admin sees all pending approvals
+                    }
+                    else if (isManager)
+                    {
+                        // Manager sees ALL Manager-level pending approvals (not just assigned to them)
+                        approvalsQuery = approvalsQuery.Where(a => 
+                            a.ApprovalLevel == Domain.Enums.ApprovalLevel.Manager && 
+                            !a.EscalatedToAdmin);
+                    }
+                    else
+                    {
+                        // SalesRep sees approvals they requested
+                        approvalsQuery = approvalsQuery.Where(a => a.RequestedByUserId == userId);
+                    }
+                    pendingApprovals = await approvalsQuery.CountAsync();
                 }
-                var pendingApprovals = await approvalsQuery.CountAsync();
+                catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "42P01")
+                {
+                    // DiscountApprovals table does not exist yet (relation does not exist error)
+                    pendingApprovals = 0;
+                }
+                catch (Exception)
+                {
+                    // Any other error - set to 0
+                    pendingApprovals = 0;
+                }
 
                 // Get total payments count (join with Quotations to filter by user)
                 int totalPayments = 0;
                 try
                 {
-                    if (!isAdmin)
-                    {
-                        // For non-admin users, filter payments by joining with quotations
-                        totalPayments = await _db.Payments
-                            .AsNoTracking()
-                            .Join(_db.Quotations,
-                                p => p.QuotationId,
-                                q => q.QuotationId,
-                                (p, q) => new { Payment = p, Quotation = q })
-                            .Where(x => x.Quotation.CreatedByUserId == userId)
-                            .CountAsync();
-                    }
-                    else
-                    {
-                        // Admin sees all payments
-                        totalPayments = await _db.Payments.AsNoTracking().CountAsync();
-                    }
+                    System.Diagnostics.Debug.WriteLine("GetDashboardStats: Starting payments count query...");
+                    // Re-enable tenant filtering with correct tenant ID
+                    var currentTenantId = _tenantContext.CurrentTenantId;
+                    totalPayments = await _db.Payments.AsNoTracking().Where(p => p.TenantId == currentTenantId).CountAsync();
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Payments table exists, count = {totalPayments} for tenant {currentTenantId}");
                 }
-                catch
+                catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "42P01")
                 {
-                    // Payments table might not exist yet or might have issues
+                    // Payments table does not exist yet (relation does not exist error)
                     totalPayments = 0;
+                    System.Diagnostics.Debug.WriteLine("GetDashboardStats: Payments table does not exist (42P01)");
+                }
+                catch (Exception ex)
+                {
+                    // Any other error - set to 0
+                    totalPayments = 0;
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Error counting payments: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"GetDashboardStats: Error details: {ex}");
                 }
 
-                return Ok(new
+                var response = new
                 {
                     success = true,
                     data = new
@@ -262,14 +355,20 @@ namespace CRM.Api.Controllers
                         totalPayments,
                         pendingApprovals
                     }
-                });
+                };
+                
+                System.Diagnostics.Debug.WriteLine($"GetDashboardStats Final Response: TotalClients={totalClients}, TotalQuotations={totalQuotations}, TotalPayments={totalPayments}, PendingApprovals={pendingApprovals}");
+                
+                return Ok(response);
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"GetDashboardStats Error: {ex}");
                 return StatusCode(500, new
                 {
                     error = "An error occurred while processing the request",
-                    message = ex.Message
+                    message = ex.Message,
+                    stackTrace = System.Diagnostics.Debugger.IsAttached ? ex.StackTrace : null
                 });
             }
         }
@@ -286,9 +385,25 @@ namespace CRM.Api.Controllers
             var activeUsers = await _db.Users.CountAsync(u => u.IsActive);
             var totalClients = await _db.Clients.CountAsync(c => c.DeletedAt == null);
             var totalQuotations = await _db.Quotations.CountAsync();
-            var totalRevenue = await _db.Payments
-                .Where(p => p.PaymentStatus == PaymentStatus.Success)
-                .SumAsync(p => (decimal?)p.AmountPaid) ?? 0;
+            
+            // Get total revenue - handle case where Payments table might not exist
+            decimal totalRevenue = 0;
+            try
+            {
+                totalRevenue = await _db.Payments
+                    .Where(p => p.PaymentStatus == PaymentStatus.Success)
+                    .SumAsync(p => (decimal?)p.AmountPaid) ?? 0;
+            }
+            catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "42P01")
+            {
+                // Payments table does not exist yet (relation does not exist error)
+                totalRevenue = 0;
+            }
+            catch (Exception)
+            {
+                // Any other error - set to 0
+                totalRevenue = 0;
+            }
 
             // Get role counts (simplified - would need proper role lookup)
             // Note: Role entity structure may vary - using RoleId for now

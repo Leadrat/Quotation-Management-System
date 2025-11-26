@@ -51,6 +51,58 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+// Authenticated download helper that handles 401 -> token refresh, and saves file with filename
+async function downloadWithAuth(path: string, defaultFilename: string): Promise<void> {
+  const url = `${API_BASE}${path}`;
+  if (!url) throw new Error("Missing API base URL");
+  const headers = new Headers();
+  let token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let res = await fetch(url, { method: "GET", headers, credentials: "include" });
+
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      token = newToken;
+      headers.set("Authorization", `Bearer ${newToken}`);
+      res = await fetch(url, { method: "GET", headers, credentials: "include" });
+    }
+  }
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      message = body?.error || body?.message || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const disposition = res.headers.get("Content-Disposition") || res.headers.get("content-disposition");
+  let filename = defaultFilename;
+  if (disposition) {
+    // Try RFC5987 filename* and plain filename
+    const matchStar = disposition.match(/filename\*=UTF-8''([^;\n]+)/i);
+    const match = disposition.match(/filename="?([^";\n]+)"?/i);
+    if (matchStar && matchStar[1]) {
+      try { filename = decodeURIComponent(matchStar[1]); } catch { filename = matchStar[1]; }
+    } else if (match && match[1]) {
+      filename = match[1];
+    }
+  }
+
+  const blob = await res.blob();
+  const link = document.createElement("a");
+  const objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit & { auth?: boolean } = {}): Promise<T> {
   if (!path || path.trim() === "") {
     throw new Error("API path cannot be empty");
@@ -106,8 +158,22 @@ export async function apiFetch<T>(path: string, options: RequestInit & { auth?: 
   }
   // Handle blob responses (for file downloads)
   const contentType = res.headers.get("content-type");
-  if (contentType && (contentType.includes("application/octet-stream") || contentType.includes("text/csv"))) {
-    return res.blob() as unknown as T;
+  if (contentType && (
+    contentType.includes("application/octet-stream") ||
+    contentType.includes("text/csv") ||
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+  )) {
+    const disposition = res.headers.get("Content-Disposition");
+    const filename = disposition && disposition.match(/filename="([^"]+)"/);
+    const blob = await res.blob();
+    if (filename) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename[1];
+      a.click();
+    }
+    return blob as unknown as T;
   }
   
   // try parse json
@@ -753,10 +819,18 @@ export const QuotationsApi = {
       if (err.message?.includes("204")) return undefined;
       throw err;
     }),
-  downloadPdf: (quotationId: string) => {
-    const url = `${API_BASE}/api/v1/quotations/${quotationId}/download-pdf`;
-    window.open(url, "_blank");
-  }
+  downloadPdf: async (quotationId: string) => {
+    const path = `/api/v1/quotations/${quotationId}/download-pdf`;
+    await downloadWithAuth(path, `Quotation-${quotationId}.pdf`);
+  },
+  downloadDocx: async (quotationId: string) => {
+    const path = `/api/v1/quotations/${quotationId}/download-docx`;
+    await downloadWithAuth(path, `Quotation-${quotationId}.docx`);
+  },
+  getTemplatePreview: (quotationId: string) =>
+    apiFetch<{ success: boolean; data: { hasTemplate: boolean; templateName?: string; fileName?: string; content?: string; rawText?: string } }>(
+      `/api/v1/quotations/${quotationId}/template-preview`
+    )
 };
 
 export const ClientPortalApi = {
@@ -801,6 +875,10 @@ export const ClientPortalApi = {
     const url = `${API_BASE}/api/v1/client-portal/quotations/${quotationId}/${accessToken}/download`;
     window.open(url, "_blank");
   },
+  getQuotationTemplatePreview: (quotationId: string, accessToken: string) =>
+    apiFetch<{ hasTemplate: boolean; templateName?: string; content?: string }>(
+      `/api/v1/client-portal/quotations/${quotationId}/${accessToken}/template-preview`
+    ),
 };
 
 export const TemplatesApi = {
@@ -898,6 +976,40 @@ export const TemplatesApi = {
     apiFetch<{ success: boolean; data: import("../types/templates").QuotationTemplate }>(
       "/api/v1/quotation-templates/upload",
       { method: "POST", body: formData, auth: true }
+    ),
+};
+
+export const DocumentTemplatesApi = {
+  list: (params: { templateType?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.templateType) {
+      q.set("templateType", params.templateType);
+    }
+    const query = q.toString();
+    const path = query ? `/api/v1/document-templates?${query}` : "/api/v1/document-templates";
+    return apiFetch<{
+      success: boolean;
+      data: import("../types/templates").QuotationTemplate[];
+    }>(path);
+  },
+  upload: (formData: FormData) =>
+    apiFetch<{ success: boolean; data: import("../types/templates").QuotationTemplate }>(
+      "/api/v1/document-templates/upload",
+      { method: "POST", body: formData, auth: true }
+    ),
+  getPlaceholders: (templateId: string) =>
+    apiFetch<{ success: boolean; data: Array<{ placeholderName: string; placeholderType: string; defaultValue?: string }> }>(
+      `/api/v1/document-templates/${templateId}/placeholders`
+    ),
+  savePlaceholders: (templateId: string, placeholders: Array<{ placeholderName: string; placeholderType: string; defaultValue?: string }>) =>
+    apiFetch<{ success: boolean }>(
+      `/api/v1/document-templates/${templateId}/placeholders`,
+      { method: "POST", body: JSON.stringify(placeholders) }
+    ),
+  convert: (templateId: string) =>
+    apiFetch<{ success: boolean; data: import("../types/templates").QuotationTemplate }>(
+      `/api/v1/document-templates/${templateId}/convert`,
+      { method: "POST" }
     ),
 };
 
@@ -1057,6 +1169,42 @@ export const PaymentsApi = {
       "/api/v1/payments/initiate",
       { method: "POST", body: JSON.stringify(request) }
     ),
+  createManual: (quotationId: string, payload: { amountReceived: number; currency?: string; method?: string; paymentDate?: string; remarks?: string }) =>
+    apiFetch<import("../types/payments").PaymentDto>(
+      `/api/v1/quotations/${quotationId}/payments`,
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  updateManual: (paymentId: string, payload: { amountReceived: number; currency?: string; method?: string; paymentDate?: string; remarks?: string }) =>
+    apiFetch<import("../types/payments").PaymentDto>(
+      `/api/v1/payments/${paymentId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  getStats: (params: { startDate?: string; endDate?: string } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return apiFetch<{ success: boolean; summary: any; statusCounts: Array<{ status: string; count: number; totalAmount: number }>; acceptedPending?: { amount: number; quotationCount: number } }>(
+      `/api/v1/payments/stats${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getOutstanding: (quotationId: string) =>
+    apiFetch<{ success: boolean; data: { quotationId: string; totalAmount: number; paidNet: number; outstanding: number } }>(
+      `/api/v1/quotations/${quotationId}/payments/outstanding`
+    ),
+  getQuotationHistory: (quotationId: string) =>
+    apiFetch<{ success: boolean; data: import("../types/payments").PaymentDto[] }>(
+      `/api/v1/quotations/${quotationId}/payments/history`
+    ),
+  list: (params: { status?: string; startDate?: string; endDate?: string; pageNumber?: number; pageSize?: number } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return apiFetch<{ success: boolean; data: import("../types/payments").PaymentDto[]; pageNumber: number; pageSize: number; totalCount: number }>(
+      `/api/v1/payments${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
   getById: (paymentId: string) =>
     apiFetch<import("../types/payments").PaymentDto>(
       `/api/v1/payments/${paymentId}`

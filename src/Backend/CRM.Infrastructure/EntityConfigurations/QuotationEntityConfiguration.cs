@@ -78,6 +78,8 @@ namespace CRM.Infrastructure.EntityConfigurations
 
             builder.Property(x => x.PendingApprovalId);
 
+            builder.Property(x => x.TemplateId);
+
             builder.Property(x => x.CreatedAt)
                 .IsRequired();
 
@@ -129,6 +131,9 @@ namespace CRM.Infrastructure.EntityConfigurations
 
             builder.HasIndex(x => x.PendingApprovalId)
                 .HasFilter("\"PendingApprovalId\" IS NOT NULL");
+
+            builder.HasIndex(x => x.TemplateId)
+                .HasFilter("\"TemplateId\" IS NOT NULL");
 
             // Tax management relationships
             builder.HasOne<Country>()

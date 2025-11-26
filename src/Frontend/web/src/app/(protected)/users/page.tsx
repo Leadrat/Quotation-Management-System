@@ -36,7 +36,11 @@ export default function UsersListPage() {
         pageSize, 
         searchTerm: searchTerm || undefined 
       });
-      setItems(res.data || []);
+      // Filter out Client role users - only Admin, SalesRep, and Manager should be shown
+      const filteredData = (res.data || []).filter((user: any) => 
+        user.roleName !== "Client" && user.role !== "Client"
+      );
+      setItems(filteredData);
       setPageNumber(res.pageNumber);
       setPageSize(res.pageSize);
       setTotal(res.totalCount);
@@ -75,7 +79,7 @@ export default function UsersListPage() {
 
   return (
     <>
-      <PageBreadcrumb pageName="Users" />
+      <PageBreadcrumb pageTitle="Users" />
       
       <div className="flex flex-col gap-6">
         <ComponentCard>

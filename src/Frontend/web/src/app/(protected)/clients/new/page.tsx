@@ -11,7 +11,6 @@ export default function NewClientPage() {
     mobile: "",
     contactName: "",
     gstin: "",
-    stateCode: "",
     address: "",
     city: "",
     state: "",
@@ -23,10 +22,10 @@ export default function NewClientPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function submit() {
-    setSaving(true); 
+    setSaving(true);
     setError(null);
     setFieldErrors({});
-    
+
     try {
       // Combine phoneCode and mobile for backend validation
       let mobileWithCode: string | undefined;
@@ -35,21 +34,20 @@ export default function NewClientPage() {
       } else {
         mobileWithCode = form.mobile || form.phoneCode || undefined;
       }
-      
+
       const payload = {
         companyName: form.companyName,
         email: form.email,
         mobile: mobileWithCode,
         contactName: form.contactName || undefined,
         gstin: form.gstin || undefined,
-        stateCode: form.stateCode || undefined,
         address: form.address || undefined,
         city: form.city || undefined,
         state: form.state || undefined,
         pinCode: form.pinCode || undefined,
         phoneCode: form.phoneCode || undefined,
       };
-      
+
       const res = await ClientsApi.create(payload);
       const id = (res as any)?.data?.clientId;
       router.replace(`/clients/${id}`);
@@ -64,14 +62,13 @@ export default function NewClientPage() {
           'Mobile': 'mobile',
           'ContactName': 'contactName',
           'Gstin': 'gstin',
-          'StateCode': 'stateCode',
           'Address': 'address',
           'City': 'city',
           'State': 'state',
           'PinCode': 'pinCode',
           'PhoneCode': 'phoneCode'
         };
-        
+
         Object.keys(e.errors).forEach(key => {
           const frontendKey = fieldNameMap[key] || key.toLowerCase();
           if (Array.isArray(e.errors[key])) {
@@ -85,8 +82,8 @@ export default function NewClientPage() {
       } else {
         setError(e.message || "Failed to create client");
       }
-    } finally { 
-      setSaving(false); 
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -96,26 +93,24 @@ export default function NewClientPage() {
       {error && <div className="text-red-600 mb-3 text-sm">{error}</div>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {([
-          ["Company Name","companyName", true],
-          ["Email","email", true],
-          ["Mobile","mobile", true],
-          ["Contact Name","contactName", false],
-          ["GSTIN","gstin", false],
-          ["State Code (2 digits, e.g., 06 for Haryana)","stateCode", false],
-          ["Address","address", false],
-          ["City","city", false],
-          ["State","state", false],
-          ["Pin Code (6 digits)","pinCode", false],
-          ["Phone Code","phoneCode", false],
+          ["Company Name", "companyName", true],
+          ["Email", "email", true],
+          ["Mobile", "mobile", true],
+          ["Contact Name", "contactName", false],
+          ["GSTIN", "gstin", false],
+          ["Address", "address", false],
+          ["City", "city", false],
+          ["State", "state", false],
+          ["Pin Code (6 digits)", "pinCode", false],
+          ["Phone Code", "phoneCode", false],
         ] as const).map(([label, key, required]) => (
           <div key={key}>
             <label className="block text-sm mb-1">
               {label} {required && <span className="text-red-500">*</span>}
             </label>
             <input
-              className={`w-full rounded border px-3 py-2 ${
-                fieldErrors[key] ? 'border-red-500' : ''
-              }`}
+              className={`w-full rounded border px-3 py-2 ${fieldErrors[key] ? 'border-red-500' : ''
+                }`}
               value={(form as any)[key]}
               onChange={(e) => {
                 setForm(prev => ({ ...prev, [key]: e.target.value }));
@@ -136,7 +131,7 @@ export default function NewClientPage() {
         ))}
       </div>
       <div className="mt-4 space-x-2">
-        <button onClick={submit} disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-50">{saving?"Saving...":"Save"}</button>
+        <button onClick={submit} disabled={saving} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-50">{saving ? "Saving..." : "Save"}</button>
         <button onClick={() => router.back()} className="rounded border px-4 py-2">Cancel</button>
       </div>
     </div>

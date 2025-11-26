@@ -60,7 +60,7 @@ export default function TeamsPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="Teams" />
+        <PageBreadcrumb pageTitle="Teams" />
         <ComponentCard>
           <div className="text-center py-8">Loading teams...</div>
         </ComponentCard>
@@ -70,7 +70,7 @@ export default function TeamsPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Teams" />
+      <PageBreadcrumb pageTitle="Teams" />
       
       <ComponentCard>
         <div className="flex items-center justify-between mb-6">

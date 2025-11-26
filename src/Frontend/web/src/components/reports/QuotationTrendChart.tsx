@@ -6,7 +6,7 @@ interface QuotationTrendChartProps {
   data: QuotationTrendData[];
 }
 
-export function QuotationTrendChart({ data }: QuotationTrendChartProps) {
+export default function QuotationTrendChart({ data }: QuotationTrendChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">

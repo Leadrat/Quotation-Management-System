@@ -62,7 +62,9 @@ export default function QuotationsListPage() {
       if (dateTo) params.dateTo = dateTo;
 
       const result = await QuotationsApi.list(params);
+      console.log("Quotations API response:", result);
       const quotations = result.data || [];
+      console.log("Quotations count:", quotations.length, "Total count:", result.totalCount);
       setItems(quotations);
       setTotal(result.totalCount || 0);
       setError(null);
@@ -145,7 +147,7 @@ export default function QuotationsListPage() {
       
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Quotations</h2>
-        {role !== "Admin" && (
+        {role === "SalesRep" && (
           <Link href="/quotations/new">
             <Button size="sm" variant="outline" className="!text-black dark:!text-white">Create Quotation</Button>
           </Link>
@@ -271,7 +273,7 @@ export default function QuotationsListPage() {
                           <Link href={`/quotations/${item.quotationId}`}>
                             <Button size="sm" variant="outline" className="text-xs px-2 py-1">View</Button>
                           </Link>
-                          {item.status === "DRAFT" && role !== "Admin" && (
+                          {item.status === "DRAFT" && role === "SalesRep" && (
                             <>
                               <Link href={`/quotations/${item.quotationId}/edit`}>
                                 <Button size="sm" variant="outline" className="text-xs px-2 py-1">Edit</Button>

@@ -121,16 +121,35 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const { unreadCount } = useNotifications();
 
   useEffect(() => {
     const token = getAccessToken();
-    const role = getRoleFromToken(token);
-    setIsAdmin(role === "Admin");
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+    setIsAdmin(userRole === "Admin");
   }, []);
 
   const navItems: NavItem[] = React.useMemo(() => {
     const items = [...baseNavItems];
+    
+    // Remove Templates for Manager role
+    if (role === "Manager") {
+      const templatesIndex = items.findIndex(item => item.path === "/templates");
+      if (templatesIndex !== -1) {
+        items.splice(templatesIndex, 1);
+      }
+    }
+    
+    // Remove Approvals for Admin role
+    if (role === "Admin") {
+      const approvalsIndex = items.findIndex(item => item.path === "/approvals");
+      if (approvalsIndex !== -1) {
+        items.splice(approvalsIndex, 1);
+      }
+    }
+    
     // Add notification badge
     const notificationsIndex = items.findIndex(item => item.path === "/notifications");
     if (notificationsIndex !== -1) {
@@ -141,7 +160,7 @@ const AppSidebar: React.FC = () => {
       items.push(...adminNavItems);
     }
     return items;
-  }, [isAdmin, unreadCount]);
+  }, [isAdmin, role, unreadCount]);
 
   const renderMenuItems = (
     navItems: NavItem[],

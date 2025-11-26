@@ -46,14 +46,14 @@ export default function EditQuotationPage() {
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [role, setRole] = useState<string | null>(null);
 
-  // Check role on mount - redirect admin
+  // Check role on mount - redirect admin and manager
   useEffect(() => {
     const token = getAccessToken();
     const userRole = getRoleFromToken(token);
     setRole(userRole);
 
-    // Admin cannot edit quotations - redirect to view page
-    if (userRole === "Admin") {
+    // Admin and Manager cannot edit quotations - redirect to view page
+    if (userRole === "Admin" || userRole === "Manager") {
       router.replace(`/quotations/${quotationId}`);
     }
   }, [router, quotationId]);

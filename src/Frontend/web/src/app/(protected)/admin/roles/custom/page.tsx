@@ -130,8 +130,8 @@ export default function CustomRolesPage() {
   if (loading && roles.length === 0) {
     return (
       <div className="p-6">
-        <PageBreadcrumb pageName="Custom Roles" />
-        <ComponentCard>
+        <PageBreadcrumb pageTitle="Custom Roles" />
+        <ComponentCard title="Loading">
           <div className="text-center py-8">Loading custom roles...</div>
         </ComponentCard>
       </div>
@@ -140,20 +140,20 @@ export default function CustomRolesPage() {
 
   return (
     <div className="p-6">
-      <PageBreadcrumb pageName="Custom Roles" />
-      
-      <ComponentCard>
+      <PageBreadcrumb pageTitle="Custom Roles" />
+
+      <ComponentCard title="Custom Roles">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-black dark:text-white">Custom Roles & Permissions</h2>
-          <Button color="primary" onClick={() => setShowCreateForm(true)}>
+          <Button variant="primary" onClick={() => setShowCreateForm(true)}>
             Create Custom Role
           </Button>
         </div>
 
         {error && (
-          <Alert color="danger" className="mb-4">
-            {error}
-          </Alert>
+          <div className="mb-4">
+            <Alert variant="error" title="Error" message={error} />
+          </div>
         )}
 
         {showCreateForm && (
@@ -204,10 +204,10 @@ export default function CustomRolesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button type="button" onClick={() => { setShowCreateForm(false); setNewRoleName(""); setNewRoleDescription(""); setSelectedPermissions([]); }}>
+                <Button variant="outline" onClick={() => { setShowCreateForm(false); setNewRoleName(""); setNewRoleDescription(""); setSelectedPermissions([]); }}>
                   Cancel
                 </Button>
-                <Button color="primary" onClick={handleCreateRole} disabled={loading}>
+                <Button variant="primary" onClick={handleCreateRole} disabled={loading}>
                   Create Role
                 </Button>
               </div>
@@ -233,13 +233,13 @@ export default function CustomRolesPage() {
                   <TableCell className="font-medium text-black dark:text-white">{role.roleName}</TableCell>
                   <TableCell className="text-body-color dark:text-body-color-dark">{role.description || "-"}</TableCell>
                   <TableCell>
-                    <Badge color="primary" className="text-xs">
+                    <Badge color="primary" size="sm">
                       {role.permissions.length} permissions
                     </Badge>
                   </TableCell>
                   <TableCell>{role.userCount}</TableCell>
                   <TableCell>
-                    <Badge color={role.isActive ? "success" : "danger"}>
+                    <Badge color={role.isActive ? "success" : "error"}>
                       {role.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
@@ -293,10 +293,10 @@ export default function CustomRolesPage() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button type="button" onClick={() => { setEditingRole(null); setSelectedPermissions([]); }}>
+              <Button variant="outline" onClick={() => { setEditingRole(null); setSelectedPermissions([]); }}>
                 Cancel
               </Button>
-              <Button color="primary" onClick={() => handleUpdatePermissions(editingRole.roleId)} disabled={loading}>
+              <Button variant="primary" onClick={() => handleUpdatePermissions(editingRole.roleId)} disabled={loading}>
                 Update Permissions
               </Button>
             </div>
