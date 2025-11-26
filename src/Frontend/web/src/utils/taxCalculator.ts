@@ -81,6 +81,7 @@ export interface LineItem {
   quantity: number;
   unitRate: number;
   amount?: number;
+  discountAmount?: number;
 }
 
 export function calculateQuotationTotals(
@@ -89,17 +90,26 @@ export function calculateQuotationTotals(
   clientStateCode?: string | null,
   companyStateCode?: string
 ): QuotationTotals {
-  // Calculate subtotal from line items
+  // Calculate subtotal from line items (product-level discounts already applied in amount)
   const subtotal = lineItems.reduce((sum, item) => {
     const amount = item.amount ?? item.quantity * item.unitRate;
     return sum + amount;
   }, 0);
 
-  // Calculate discount
-  const discountAmount = subtotal * (discountPercentage / 100);
-  const finalDiscountAmount = Math.min(discountAmount, subtotal); // Discount cannot exceed subtotal
+  // Calculate product-level discounts
+  const productLevelDiscounts = lineItems.reduce((sum, item) => {
+    return sum + (item.discountAmount || 0);
+  }, 0);
 
-  // Calculate tax
+  // Calculate quotation-level discount (applied after product-level discounts)
+  const quotationDiscountAmount = subtotal * (discountPercentage / 100);
+  const finalQuotationDiscount = Math.min(quotationDiscountAmount, subtotal);
+
+  // Total discount = product-level + quotation-level
+  const totalDiscountAmount = productLevelDiscounts + finalQuotationDiscount;
+  const finalDiscountAmount = Math.min(totalDiscountAmount, subtotal);
+
+  // Calculate tax on taxable amount (after all discounts)
   const taxResult = calculateTax({
     subtotal,
     discountAmount: finalDiscountAmount,

@@ -7,13 +7,18 @@ namespace CRM.Domain.Enums
         QuotationViewed,
         QuotationAccepted,
         QuotationRejected,
+        QuotationUpdated,
         ApprovalNeeded,
         ApprovalApproved,
         ApprovalRejected,
         QuotationExpiring,
         QuotationExpired,
         ClientResponse,
-        CommentMention
+        CommentMention,
+        PaymentRequested,
+        PaymentReceived,
+        PaymentFailed,
+        PaymentOverdue
     }
 }
 

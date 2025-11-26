@@ -17,7 +17,8 @@ namespace CRM.Application.Mapping
                 .ForMember(dest => dest.CreatedByUserName, opt => opt.MapFrom(src => ResolveUserName(src.CreatedByUser)))
                 .ForMember(dest => dest.LineItems, opt => opt.MapFrom(src => src.LineItems));
 
-            CreateMap<QuotationLineItem, LineItemDto>();
+            CreateMap<QuotationLineItem, LineItemDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.ProductName : null));
 
             CreateMap<CreateLineItemRequest, QuotationLineItem>()
                 .ForMember(dest => dest.LineItemId, opt => opt.Ignore())

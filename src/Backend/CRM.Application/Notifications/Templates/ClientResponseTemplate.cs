@@ -5,12 +5,12 @@ namespace CRM.Application.Notifications.Services
 {
     public class ClientResponseTemplate : BaseNotificationTemplate
     {
-        public override string GetSubject(Notification notification)
+        public override string GetSubject(UserNotification notification)
         {
             return ReplacePlaceholders("Client Response Received for Quotation {QuotationNumber}", notification);
         }
 
-        public override string GetBody(Notification notification)
+        public override string GetBody(UserNotification notification)
         {
             return ReplacePlaceholders(@"
                 <h2>Client Response Received</h2>

@@ -32,7 +32,7 @@ namespace CRM.Application.QuotationTemplates.Queries.Handlers
             var template = await _db.QuotationTemplates
                 .Include(t => t.OwnerUser)
                 .Include(t => t.ApprovedByUser)
-                .Include(t => t.LineItems.OrderBy(li => li.SequenceNumber))
+                .Include(t => t.LineItems)
                 .FirstOrDefaultAsync(t => t.TemplateId == query.TemplateId);
 
             if (template == null)
@@ -51,6 +51,14 @@ namespace CRM.Application.QuotationTemplates.Queries.Handlers
             if (!isAdmin && template.IsDeleted())
             {
                 throw new QuotationTemplateNotFoundException(query.TemplateId);
+            }
+
+            // Ensure line items are ordered as expected
+            if (template.LineItems != null)
+            {
+                template.LineItems = template.LineItems
+                    .OrderBy(li => li.SequenceNumber)
+                    .ToList();
             }
 
             return _mapper.Map<QuotationTemplateDto>(template);
@@ -88,4 +96,3 @@ namespace CRM.Application.QuotationTemplates.Queries.Handlers
         }
     }
 }
-

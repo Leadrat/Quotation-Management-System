@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { QuotationsApi, ClientsApi, TemplatesApi } from "@/lib/api";
+import { QuotationsApi, ClientsApi, TemplatesApi, TaxCalculationApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { calculateQuotationTotals } from "@/utils/taxCalculator";
 import { formatCurrency } from "@/utils/quotationFormatter";
 import { QuotationErrorBoundary } from "@/components/quotations/ErrorBoundary";
@@ -9,14 +10,21 @@ import { QuotationFormSkeleton } from "@/components/quotations/LoadingSkeleton";
 import { useToast, ToastContainer } from "@/components/quotations/Toast";
 import { ApplyTemplateModal } from "@/components/templates";
 import { ApprovalSubmissionModal } from "@/components/approvals";
+import TaxCalculationPreview from "@/components/tax/TaxCalculationPreview";
 import type { QuotationTemplate } from "@/types/templates";
 
 interface LineItem {
+  lineItemId: string;
   itemName: string;
   description: string;
   quantity: number;
   unitRate: number;
   amount: number;
+  productServiceCategoryId?: string;
+  productId?: string;
+  billingCycle?: BillingCycle;
+  hours?: number;
+  taxCategoryId?: string;
 }
 
 export default function CreateQuotationPage() {
@@ -24,9 +32,24 @@ export default function CreateQuotationPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+
+  // Check role on mount - redirect admin and manager
+  useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+
+    // Admin and Manager cannot create quotations - redirect to quotations list
+    if (userRole === "Admin" || userRole === "Manager") {
+      router.replace("/quotations");
+    }
+  }, [router]);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [countries, setCountries] = useState<any[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState<string>("");
   const [quotationDate, setQuotationDate] = useState(new Date().toISOString().split("T")[0]);
   const [validUntil, setValidUntil] = useState(() => {
     const date = new Date();
@@ -36,15 +59,20 @@ export default function CreateQuotationPage() {
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { itemName: "", description: "", quantity: 1, unitRate: 0, amount: 0 },
+    { lineItemId: crypto.randomUUID(), itemName: "", description: "", quantity: 1, unitRate: 0, amount: 0 },
   ]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [createdQuotationId, setCreatedQuotationId] = useState<string | null>(null);
+  const [quotationId, setQuotationId] = useState<string | null>(null);
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null); // Track template used
   const toast = useToast();
 
   const requiresApproval = discountPercentage >= 10;
   const approvalThreshold = discountPercentage >= 20 ? 20 : 10;
+
+  // Ensure date strings are in 'YYYY-MM-DD' for HTML date inputs
+  const toDateOnly = (s: string) => (s && s.includes("T") ? s.split("T")[0] : s);
 
   useEffect(() => {
     // Load clients for dropdown
@@ -55,6 +83,18 @@ export default function CreateQuotationPage() {
       toast.error("Failed to load clients");
       setInitialLoading(false);
     });
+
+    // Load countries for dropdown
+    TaxCalculationApi.getCountries().then((res) => {
+      setCountries(res.data || []);
+      // Set default country if available
+      const defaultCountry = res.data?.find((c: any) => c.isDefault);
+      if (defaultCountry) {
+        setSelectedCountryId(defaultCountry.countryId);
+      }
+    }).catch((err) => {
+      console.error("Failed to load countries:", err);
+    });
   }, []);
 
   useEffect(() => {
@@ -62,6 +102,10 @@ export default function CreateQuotationPage() {
     if (selectedClientId) {
       const client = clients.find((c) => c.clientId === selectedClientId);
       setSelectedClient(client);
+      // Auto-select client's country if available
+      if (client?.countryId) {
+        setSelectedCountryId(client.countryId);
+      }
     } else {
       setSelectedClient(null);
     }
@@ -77,7 +121,7 @@ export default function CreateQuotationPage() {
   };
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { itemName: "", description: "", quantity: 1, unitRate: 0, amount: 0 }]);
+    setLineItems([...lineItems, { lineItemId: crypto.randomUUID(), itemName: "", description: "", quantity: 1, unitRate: 0, amount: 0 }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -97,20 +141,25 @@ export default function CreateQuotationPage() {
       const appliedData = result.data;
 
       // Apply template data to form
-      if (appliedData.quotationDate) setQuotationDate(appliedData.quotationDate);
-      if (appliedData.validUntil) setValidUntil(appliedData.validUntil);
+      if (appliedData.quotationDate) setQuotationDate(toDateOnly(appliedData.quotationDate));
+      if (appliedData.validUntil) setValidUntil(toDateOnly(appliedData.validUntil));
       setDiscountPercentage(appliedData.discountPercentage || 0);
       if (appliedData.notes) setNotes(appliedData.notes);
 
       // Apply line items
       const newLineItems: LineItem[] = appliedData.lineItems.map((item) => ({
+        lineItemId: crypto.randomUUID(),
         itemName: item.itemName,
         description: item.description || "",
         quantity: item.quantity,
         unitRate: item.unitRate,
         amount: item.quantity * item.unitRate,
+        productServiceCategoryId: item.productServiceCategoryId,
       }));
       setLineItems(newLineItems);
+
+      // Store template ID for later use when creating quotation
+      setAppliedTemplateId(template.templateId);
 
       toast.success(`Template "${template.name}" applied successfully!`);
       setShowTemplateModal(false);
@@ -146,6 +195,7 @@ export default function CreateQuotationPage() {
         validUntil,
         discountPercentage,
         notes: notes || undefined,
+        templateId: appliedTemplateId || undefined, // Include template ID if template was applied
         lineItems: lineItems.map((item) => ({
           itemName: item.itemName,
           description: item.description || undefined,
@@ -217,7 +267,7 @@ export default function CreateQuotationPage() {
   if (initialLoading) {
     return (
       <QuotationErrorBoundary>
-        <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+        <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
           <QuotationFormSkeleton />
         </div>
       </QuotationErrorBoundary>
@@ -226,7 +276,7 @@ export default function CreateQuotationPage() {
 
   return (
     <QuotationErrorBoundary>
-      <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+      <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
         <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       <div className="mb-6">
         <h4 className="text-title-md2 font-bold text-black dark:text-white">Create Quotation</h4>
@@ -242,12 +292,12 @@ export default function CreateQuotationPage() {
         {/* Client Selection */}
         <div>
           <div className="mb-2.5 flex items-center justify-between">
-            <label className="block text-black dark:text-black">Client *</label>
-            {selectedClientId && (
+            <label className="block text-black dark:text-white">Client *</label>
+            {selectedClientId && (role === "Admin" || role === "SalesRep") && (
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(true)}
-                className="rounded bg-blue-500 px-4 py-2 text-sm text-black border-2 border-blue-500 hover:bg-opacity-90"
+                className="rounded border-2 border-blue-500 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-blue-50 dark:bg-boxdark dark:border-blue-500 dark:text-white dark:hover:bg-blue-900/20"
               >
                 Apply Template
               </button>
@@ -257,18 +307,41 @@ export default function CreateQuotationPage() {
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
             required
-            className="w-full rounded border-[1.5px] border-stroke bg-white px-5 py-3 font-medium text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-black"
+            className="w-full rounded border-[1.5px] border-stroke bg-white px-5 py-3 font-medium text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           >
-            <option value="" className="text-black border-2 border-black dark:text-black">Select a client</option>
+            <option value="" className="text-black border-2 border-black dark:text-white">Select a client</option>
             {clients.map((client) => (
-              <option key={client.clientId} value={client.clientId} className="text-black dark:black-white">
+              <option key={client.clientId} value={client.clientId} className="text-black dark:text-white">
                 {client.companyName} - {client.email}
               </option>
             ))}
           </select>
           {selectedClient && (
-            <div className="mt-2 text-sm text-black border-2 border-black dark:text-black">
+            <div className="mt-2 text-sm text-black dark:text-white border-2 border-black dark:border-white">
               <p>State: {selectedClient.state || "N/A"} ({selectedClient.stateCode || "N/A"})</p>
+            </div>
+          )}
+        </div>
+
+        {/* Country Selection */}
+        <div>
+          <label className="mb-2.5 block text-black dark:text-white">Country (for Tax Calculation) *</label>
+          <select
+            value={selectedCountryId}
+            onChange={(e) => setSelectedCountryId(e.target.value)}
+            required
+            className="w-full rounded border-[1.5px] border-stroke bg-white px-5 py-3 font-medium text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
+          >
+            <option value="" className="text-black border-2 border-black dark:text-white">Select a country</option>
+            {countries.map((country) => (
+              <option key={country.countryId} value={country.countryId} className="text-black dark:text-white">
+                {country.countryName} {country.isDefault ? "(Default)" : ""}
+              </option>
+            ))}
+          </select>
+          {selectedCountryId && (
+            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              <p>Selected country will be used for tax calculation</p>
             </div>
           )}
         </div>
@@ -330,7 +403,7 @@ export default function CreateQuotationPage() {
             <button
               type="button"
               onClick={addLineItem}
-              className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
+              className="rounded border border-blue-500 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-blue-50 dark:bg-boxdark dark:border-blue-500 dark:text-white dark:hover:bg-blue-900/20"
             >
               Add Line Item
             </button>
@@ -410,55 +483,73 @@ export default function CreateQuotationPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            className="w-full rounded-lg border-2 border-gray-300 bg-white px-5 py-3 text-base font-normal text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-lg border-2 border-gray-300 bg-white px-5 py-3 text-base font-normal text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
             placeholder="Add any additional notes or comments here..."
             style={{ color: '#111827' }}
           />
         </div>
 
-        {/* Totals Summary */}
-        <div className="rounded border border-stroke bg-gray-50 p-4 dark:border-strokedark dark:bg-meta-4">
-          <h5 className="mb-3 font-semibold text-black dark:text-white">Summary</h5>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-              <span className="font-medium text-black dark:text-white">{formatCurrency(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Discount ({discountPercentage}%):</span>
-              <span className="font-medium text-black dark:text-white">-{formatCurrency(totals.discountAmount)}</span>
-            </div>
-            {totals.cgstAmount > 0 && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
-                  <span className="font-medium text-black dark:text-white">{formatCurrency(totals.cgstAmount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
-                  <span className="font-medium text-black dark:text-white">{formatCurrency(totals.sgstAmount)}</span>
-                </div>
-              </>
-            )}
-            {totals.igstAmount > 0 && (
+        {/* Tax Calculation Preview */}
+        {selectedClientId && selectedCountryId && (
+          <TaxCalculationPreview
+            clientId={selectedClientId}
+            lineItems={lineItems.map(item => ({
+              lineItemId: item.lineItemId,
+              productServiceCategoryId: item.productServiceCategoryId,
+              amount: item.amount,
+            }))}
+            subtotal={totals.subtotal}
+            discountAmount={totals.discountAmount}
+            calculationDate={quotationDate}
+            countryId={selectedCountryId}
+          />
+        )}
+
+        {/* Legacy Totals Summary (Fallback when no client selected) */}
+        {!selectedClientId && (
+          <div className="rounded border border-stroke bg-gray-50 p-4 dark:border-strokedark dark:bg-meta-4">
+            <h5 className="mb-3 font-semibold text-black dark:text-white">Summary</h5>
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
-                <span className="font-medium text-black dark:text-white">{formatCurrency(totals.igstAmount)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
+                <span className="font-medium text-black dark:text-white">{formatCurrency(totals.subtotal)}</span>
               </div>
-            )}
-            <div className="mt-3 flex justify-between border-t border-stroke pt-2 dark:border-strokedark">
-              <span className="font-semibold text-black dark:text-white">Total Amount:</span>
-              <span className="text-lg font-bold text-primary">{formatCurrency(totals.totalAmount)}</span>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Discount ({discountPercentage}%):</span>
+                <span className="font-medium text-black dark:text-white">-{formatCurrency(totals.discountAmount)}</span>
+              </div>
+              {totals.cgstAmount > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(totals.cgstAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(totals.sgstAmount)}</span>
+                  </div>
+                </>
+              )}
+              {totals.igstAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
+                  <span className="font-medium text-black dark:text-white">{formatCurrency(totals.igstAmount)}</span>
+                </div>
+              )}
+              <div className="mt-3 flex justify-between border-t border-stroke pt-2 dark:border-strokedark">
+                <span className="font-semibold text-black dark:text-white">Total Amount:</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(totals.totalAmount)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-4">
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg border-2 border-primary bg-primary px-6 py-3 font-medium text-white shadow-md transition-all hover:bg-opacity-90 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-lg border-1 border-black bg-primary px-6 py-3 font-medium text-black dark:text-white shadow-md transition-all hover:bg-opacity-90 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating..." : "Create Quotation"}
           </button>

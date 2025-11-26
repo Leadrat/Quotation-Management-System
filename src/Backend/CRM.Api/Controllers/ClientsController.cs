@@ -8,6 +8,7 @@ using CRM.Application.Clients.Validators;
 using CRM.Application.Clients.Queries;
 using CRM.Application.Clients.Queries.Handlers;
 using CRM.Application.Common.Results;
+using CRM.Application.Common.Interfaces;
 using CRM.Infrastructure.Logging;
 using CRM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -22,62 +23,99 @@ namespace CRM.Api.Controllers
         private readonly AppDbContext _db;
         private readonly IAuditLogger _audit;
         private readonly IMapper _mapper;
+        private readonly ITenantContext _tenantContext;
 
-        public ClientsController(AppDbContext db, IAuditLogger audit, IMapper mapper)
+        public ClientsController(AppDbContext db, IAuditLogger audit, IMapper mapper, ITenantContext tenantContext)
         {
             _db = db;
             _audit = audit;
             _mapper = mapper;
+            _tenantContext = tenantContext;
         }
 
         [HttpPost]
         [Authorize(Roles = "SalesRep,Admin")]
         public async Task<IActionResult> Create([FromBody] CreateClientRequest body)
         {
-            var validator = new CreateClientRequestValidator();
-            var result = validator.Validate(body);
-            if (!result.IsValid)
+            try
             {
-                return BadRequest(new { success = false, error = "Validation failed", errors = result.ToDictionary() });
+                var validator = new CreateClientRequestValidator();
+                var result = validator.Validate(body);
+                if (!result.IsValid)
+                {
+                    return BadRequest(new { success = false, error = "Validation failed", errors = result.ToDictionary() });
+                }
+
+                // Try multiple claim types to find user ID
+                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? User.FindFirstValue("sub")
+                    ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)
+                    ?? User.FindFirstValue("userId");
+
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+                {
+                    return Unauthorized(new { success = false, error = "Invalid user token - user ID not found" });
+                }
+
+                await _audit.LogAsync("client_create_attempt", new { userId, body.Email });
+
+                var cmd = new CreateClientCommand
+                {
+                    CompanyName = body.CompanyName,
+                    ContactName = body.ContactName,
+                    Email = body.Email,
+                    Mobile = body.Mobile,
+                    PhoneCode = body.PhoneCode,
+                    Gstin = body.Gstin,
+                    StateCode = body.StateCode,
+                    Address = body.Address,
+                    City = body.City,
+                    State = body.State,
+                    PinCode = body.PinCode,
+                    CreatedByUserId = userId
+                };
+
+                var handler = new CreateClientCommandHandler(_db, _mapper, _tenantContext);
+                var created = await handler.Handle(cmd);
+
+                await _audit.LogAsync("client_create_success", new { userId, created.ClientId });
+                return StatusCode(201, new { success = true, message = "Client created successfully", data = created });
             }
-
-            var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;
-            if (!Guid.TryParse(sub, out var userId)) return Unauthorized();
-
-            await _audit.LogAsync("client_create_attempt", new { userId, body.Email });
-
-            var cmd = new CreateClientCommand
+            catch (CRM.Application.Clients.Exceptions.DuplicateEmailException ex)
             {
-                CompanyName = body.CompanyName,
-                ContactName = body.ContactName,
-                Email = body.Email,
-                Mobile = body.Mobile,
-                PhoneCode = body.PhoneCode,
-                Gstin = body.Gstin,
-                StateCode = body.StateCode,
-                Address = body.Address,
-                City = body.City,
-                State = body.State,
-                PinCode = body.PinCode,
-                CreatedByUserId = userId
-            };
-
-            var handler = new CreateClientCommandHandler(_db, _mapper);
-            var created = await handler.Handle(cmd);
-
-            await _audit.LogAsync("client_create_success", new { userId, created.ClientId });
-            return StatusCode(201, new { success = true, message = "Client created successfully", data = created });
+                return Conflict(new { success = false, error = ex.Message });
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("does not exist") || ex.Message.Contains("constraint violation") || ex.Message.Contains("Database error"))
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                // Handle database constraint violations
+                var innerException = dbEx.InnerException?.Message ?? dbEx.Message;
+                if (innerException.Contains("foreign key") || innerException.Contains("FK_") || innerException.Contains("violates foreign key constraint"))
+                {
+                    return BadRequest(new { success = false, error = "Invalid user reference. Please ensure you are properly authenticated.", details = innerException });
+                }
+                return StatusCode(500, new { success = false, error = "Database error occurred while creating client", message = innerException });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while creating client", message = ex.Message, stackTrace = System.Diagnostics.Debugger.IsAttached ? ex.StackTrace : null });
+            }
         }
 
         [HttpGet]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> List([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] Guid? userId = null)
+        {
+            try
         {
             var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;
             if (!Guid.TryParse(sub, out var requestorId)) return Unauthorized();
             var role = User.FindFirstValue("role") ?? string.Empty;
 
-            var handler = new GetAllClientsQueryHandler(_db, _mapper);
+            var handler = new GetAllClientsQueryHandler(_db, _mapper, _tenantContext);
             var result = await handler.Handle(new GetAllClientsQuery
             {
                 PageNumber = pageNumber,
@@ -87,10 +125,15 @@ namespace CRM.Api.Controllers
                 RequestorRole = role
             });
             return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving clients", message = ex.Message });
+            }
         }
 
         [HttpGet("{clientId}")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "SalesRep,Manager,Admin")]
         public async Task<IActionResult> GetById([FromRoute] Guid clientId)
         {
             var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;

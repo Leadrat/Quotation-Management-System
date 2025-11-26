@@ -27,6 +27,14 @@ namespace CRM.Application.QuotationTemplates.Dtos
         public string? Notes { get; set; }
         public List<TemplateLineItemDto> LineItems { get; set; } = new();
 
+        // File-based template properties
+        public string? TemplateType { get; set; } // "Quotation" or "ProFormaInvoice"
+        public bool IsFileBased { get; set; }
+        public string? FileName { get; set; }
+        public string? FileUrl { get; set; }
+        public long? FileSize { get; set; }
+        public string? MimeType { get; set; }
+
         // Computed properties
         public bool IsActive => !DeletedAt.HasValue;
         public bool IsEditable => IsActive && (IsApproved || Visibility == "Private");

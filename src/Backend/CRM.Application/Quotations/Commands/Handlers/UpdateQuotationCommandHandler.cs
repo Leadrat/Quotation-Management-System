@@ -6,9 +6,13 @@ using CRM.Application.Common.Persistence;
 using CRM.Application.Quotations.Dtos;
 using CRM.Application.Quotations.Exceptions;
 using CRM.Application.Quotations.Services;
+using CRM.Application.TaxManagement.Services;
+using CRM.Application.TaxManagement.Dtos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using CRM.Shared.Config;
+using System.Text.Json;
+using System.Linq;
 
 namespace CRM.Application.Quotations.Commands.Handlers
 {
@@ -17,21 +21,27 @@ namespace CRM.Application.Quotations.Commands.Handlers
         private readonly IAppDbContext _db;
         private readonly IMapper _mapper;
         private readonly QuotationTotalsCalculator _totalsCalculator;
-        private readonly TaxCalculationService _taxCalculator;
+        private readonly Quotations.Services.TaxCalculationService _taxCalculator; // Legacy service
+        private readonly ITaxCalculationService _newTaxCalculator; // New framework-based service
         private readonly QuotationSettings _settings;
+        private readonly Quotations.Services.QuotationCompanyDetailsService _quotationCompanyDetailsService;
 
         public UpdateQuotationCommandHandler(
             IAppDbContext db,
             IMapper mapper,
             QuotationTotalsCalculator totalsCalculator,
-            TaxCalculationService taxCalculator,
-            IOptions<QuotationSettings> settings)
+            Quotations.Services.TaxCalculationService taxCalculator,
+            ITaxCalculationService newTaxCalculator,
+            IOptions<QuotationSettings> settings,
+            Quotations.Services.QuotationCompanyDetailsService quotationCompanyDetailsService)
         {
             _db = db;
             _mapper = mapper;
             _totalsCalculator = totalsCalculator;
             _taxCalculator = taxCalculator;
+            _newTaxCalculator = newTaxCalculator;
             _settings = settings.Value;
+            _quotationCompanyDetailsService = quotationCompanyDetailsService;
         }
 
         public async Task<QuotationDto> Handle(UpdateQuotationCommand command)
@@ -46,8 +56,16 @@ namespace CRM.Application.Quotations.Commands.Handlers
                 throw new QuotationNotFoundException(command.QuotationId);
             }
 
-            // Authorization: User owns quotation or is admin
+            // Authorization: Only SalesRep who owns quotation or Admin can update
+            // Managers can only VIEW quotations, not update them
             var isAdmin = string.Equals(command.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
+            var isManager = string.Equals(command.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+            
+            if (isManager)
+            {
+                throw new UnauthorizedAccessException("Managers can only view quotations, not update them.");
+            }
+            
             if (!isAdmin && quotation.CreatedByUserId != command.UpdatedByUserId)
             {
                 throw new UnauthorizedAccessException("You do not have permission to update this quotation.");
@@ -144,12 +162,44 @@ namespace CRM.Application.Quotations.Commands.Handlers
             // Recalculate totals
             var totals = _totalsCalculator.Calculate(quotation!, quotation.LineItems.ToList(), quotation.DiscountPercentage);
 
-            // Recalculate tax
+            // Recalculate tax using new framework-based service
+            TaxCalculationResultDto? newTaxResult = null;
+            try
+            {
+                var lineItemTaxInputs = quotation.LineItems.Select(li => new LineItemTaxInput
+                {
+                    LineItemId = li.LineItemId,
+                    // Use TaxCategoryId if ProductServiceCategoryId is not set (for backward compatibility)
+                    ProductServiceCategoryId = li.ProductServiceCategoryId ?? li.TaxCategoryId,
+                    Amount = li.Amount
+                }).ToList();
+
+                newTaxResult = await _newTaxCalculator.CalculateTaxAsync(
+                    quotation.ClientId,
+                    lineItemTaxInputs,
+                    totals.SubTotal,
+                    totals.DiscountAmount,
+                    quotation.QuotationDate);
+            }
+            catch (Exception)
+            {
+                // Fallback to legacy service
+            }
+
+            // Fallback to legacy tax calculation if new service fails
             var clientStateCode = quotation.Client?.StateCode;
-            var taxResult = _taxCalculator.CalculateTax(
-                totals.SubTotal,
-                totals.DiscountAmount,
-                clientStateCode);
+            var taxResult = newTaxResult != null
+                ? new TaxCalculationResult
+                {
+                    TotalTax = newTaxResult.TotalTax,
+                    CgstAmount = newTaxResult.TaxBreakdown.FirstOrDefault(t => t.Component == "CGST")?.Amount ?? 0,
+                    SgstAmount = newTaxResult.TaxBreakdown.FirstOrDefault(t => t.Component == "SGST")?.Amount ?? 0,
+                    IgstAmount = newTaxResult.TaxBreakdown.FirstOrDefault(t => t.Component == "IGST")?.Amount ?? 0
+                }
+                : _taxCalculator.CalculateTax(
+                    totals.SubTotal,
+                    totals.DiscountAmount,
+                    clientStateCode);
 
             // Update quotation totals
             quotation.SubTotal = totals.SubTotal;
@@ -160,6 +210,55 @@ namespace CRM.Application.Quotations.Commands.Handlers
             quotation.IgstAmount = taxResult.IgstAmount;
             quotation.TotalAmount = totals.SubTotal - totals.DiscountAmount + taxResult.TotalTax;
             quotation.UpdatedAt = DateTimeOffset.UtcNow;
+
+            // Update company details snapshot if client country changed
+            if (quotation.Client != null && quotation.Client.CountryId.HasValue)
+            {
+                try
+                {
+                    var clientCountryId = quotation.Client.CountryId.Value;
+                    var companyDetails = await _quotationCompanyDetailsService.GetCompanyDetailsForQuotationAsync(clientCountryId);
+                    if (companyDetails != null)
+                    {
+                        quotation.CompanyDetailsSnapshot = JsonSerializer.Serialize(companyDetails);
+                    }
+                }
+                catch
+                {
+                    // Ignore errors - keep existing snapshot
+                }
+            }
+
+            // Set new tax framework fields if new tax calculation was used
+            if (newTaxResult != null)
+            {
+                quotation.TaxCountryId = newTaxResult.CountryId;
+                quotation.TaxJurisdictionId = newTaxResult.JurisdictionId;
+                quotation.TaxFrameworkId = newTaxResult.TaxFrameworkId;
+                quotation.TaxBreakdown = JsonSerializer.Serialize(newTaxResult.TaxBreakdown);
+
+                // Log tax recalculation
+                var taxLog = new Domain.Entities.TaxCalculationLog
+                {
+                    LogId = Guid.NewGuid(),
+                    QuotationId = quotation.QuotationId,
+                    ActionType = Domain.Enums.TaxCalculationActionType.Calculation,
+                    CountryId = newTaxResult.CountryId,
+                    JurisdictionId = newTaxResult.JurisdictionId,
+                    CalculationDetails = JsonSerializer.Serialize(new
+                    {
+                        Subtotal = newTaxResult.Subtotal,
+                        DiscountAmount = newTaxResult.DiscountAmount,
+                        TaxableAmount = newTaxResult.TaxableAmount,
+                        TotalTax = newTaxResult.TotalTax,
+                        TaxBreakdown = newTaxResult.TaxBreakdown,
+                        LineItemBreakdown = newTaxResult.LineItemBreakdown
+                    }),
+                    ChangedByUserId = command.UpdatedByUserId,
+                    ChangedAt = DateTimeOffset.UtcNow
+                };
+                _db.TaxCalculationLogs.Add(taxLog);
+            }
 
             await _db.SaveChangesAsync();
 

@@ -48,6 +48,16 @@ namespace CRM.Application.Mapping
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.Template, opt => opt.Ignore());
 
+            // UpdateTemplateLineItemRequest -> QuotationTemplateLineItem
+            // Note: handler controls LineItemId (preserve existing or new Guid), SequenceNumber, Amount, CreatedAt
+            CreateMap<UpdateTemplateLineItemRequest, QuotationTemplateLineItem>()
+                .ForMember(dest => dest.LineItemId, opt => opt.Ignore())
+                .ForMember(dest => dest.TemplateId, opt => opt.Ignore())
+                .ForMember(dest => dest.SequenceNumber, opt => opt.Ignore())
+                .ForMember(dest => dest.Amount, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Template, opt => opt.Ignore());
+
             // UpdateQuotationTemplateRequest -> QuotationTemplate (for updates)
             CreateMap<UpdateQuotationTemplateRequest, QuotationTemplate>()
                 .ForMember(dest => dest.TemplateId, opt => opt.Ignore())

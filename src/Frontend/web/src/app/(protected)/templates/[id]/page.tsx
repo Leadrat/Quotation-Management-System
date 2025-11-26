@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { TemplatesApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { TemplateStatusBadge, TemplatePreview } from "@/components/templates";
 import { formatCurrency } from "@/utils/quotationFormatter";
 import type { QuotationTemplate } from "@/types/templates";
@@ -15,12 +16,23 @@ export default function TemplateDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [template, setTemplate] = useState<QuotationTemplate | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
+    const token = getAccessToken();
+    const role = getRoleFromToken(token);
+    setUserRole(role);
+    
+    // Allow Admin and SalesRep to access templates, redirect others
+    if (role !== "Admin" && role !== "SalesRep") {
+      router.replace("/dashboard");
+      return;
+    }
+    
     if (templateId) {
       loadTemplate();
     }
-  }, [templateId]);
+  }, [templateId, router]);
 
   const loadTemplate = async () => {
     try {
@@ -93,18 +105,30 @@ export default function TemplateDetailPage() {
           >
             Preview
           </button>
-          <Link
-            href={`/templates/${templateId}/edit`}
-            className="rounded bg-yellow-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
-          >
-            Edit
-          </Link>
-          <button
-            onClick={handleDelete}
-            className="rounded bg-red-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
-          >
-            Delete
-          </button>
+          {(userRole === "Admin" || userRole === "SalesRep") && (
+            <Link
+              href={`/templates/${templateId}/edit`}
+              className="rounded bg-yellow-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
+            >
+              Edit
+            </Link>
+          )}
+          {(userRole === "Admin" || userRole === "SalesRep") && (
+            <Link
+              href={`/templates/${templateId}/placeholders`}
+              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-opacity-90"
+            >
+              Configure Placeholders
+            </Link>
+          )}
+          {userRole === "Admin" && (
+            <button
+              onClick={handleDelete}
+              className="rounded bg-red-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
@@ -204,14 +228,16 @@ export default function TemplateDetailPage() {
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
-        <Link
-          href={`/templates/${templateId}/versions`}
-          className="rounded bg-blue-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
-        >
-          View Version History
-        </Link>
-      </div>
+      {(userRole === "Admin" || userRole === "SalesRep") && (
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/templates/${templateId}/versions`}
+            className="rounded bg-blue-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
+          >
+            View Version History
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

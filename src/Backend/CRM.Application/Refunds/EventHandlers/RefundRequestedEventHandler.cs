@@ -1,3 +1,4 @@
+using CRM.Domain.Entities;
 using System.Threading.Tasks;
 using CRM.Domain.Events;
 using CRM.Application.Common.Persistence;
@@ -36,7 +37,7 @@ namespace CRM.Application.Refunds.EventHandlers
             // Create notification for each approver
             foreach (var approver in approvers)
             {
-                var notification = new Domain.Entities.Notification
+                var notification = new UserNotification
                 {
                     NotificationId = System.Guid.NewGuid(),
                     RecipientUserId = approver.UserId,

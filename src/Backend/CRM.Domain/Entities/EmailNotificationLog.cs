@@ -19,7 +19,7 @@ namespace CRM.Domain.Entities
         public DateTimeOffset? LastRetryAt { get; set; }
 
         // Navigation property
-        public virtual Notification? Notification { get; set; }
+        public virtual UserNotification? Notification { get; set; }
 
         // Domain methods
         public void MarkAsDelivered()

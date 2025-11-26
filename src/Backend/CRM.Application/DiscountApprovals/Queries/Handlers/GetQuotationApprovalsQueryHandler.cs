@@ -28,19 +28,30 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
 
         public async Task<List<DiscountApprovalDto>> Handle(GetQuotationApprovalsQuery query)
         {
-            _logger.LogInformation("Getting all approvals for quotation {QuotationId}", query.QuotationId);
+            try
+            {
+                _logger.LogInformation("Getting all approvals for quotation {QuotationId}", query.QuotationId);
 
-            var approvals = await _db.DiscountApprovals
-                .AsNoTracking()
-                .Include(a => a.Quotation)
-                    .ThenInclude(q => q.Client)
-                .Include(a => a.RequestedByUser)
-                .Include(a => a.ApproverUser)
-                .Where(a => a.QuotationId == query.QuotationId)
-                .OrderByDescending(a => a.CreatedAt)
-                .ToListAsync();
+                // Use includes with null-safe handling
+                var approvals = await _db.DiscountApprovals
+                    .AsNoTracking()
+                    .Where(a => a.QuotationId == query.QuotationId)
+                    .Include(a => a.Quotation)
+                        .ThenInclude(q => q.Client)
+                    .Include(a => a.RequestedByUser)
+                    .Include(a => a.ApproverUser)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .ToListAsync();
 
-            return approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToList();
+                _logger.LogInformation("Found {Count} approvals for quotation {QuotationId}", approvals.Count, query.QuotationId);
+
+                return approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting approvals for quotation {QuotationId}: {Message}", query.QuotationId, ex.Message);
+                throw;
+            }
         }
     }
 }

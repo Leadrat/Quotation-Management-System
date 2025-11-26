@@ -7,7 +7,7 @@ export default function Topbar({ onLogout }: { onLogout?: () => void }) {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-white">C</div>
-          <span className="text-sm font-semibold">CRM Admin</span>
+          <span className="text-sm font-semibold">Q-Manage</span>
         </div>
         <nav className="flex items-center gap-4 text-sm">
           <Link className="hover:underline" href="/dashboard">Dashboard</Link>

@@ -79,7 +79,7 @@ namespace CRM.Api.Controllers
         private bool TryGetUserContext(out Guid userId, out string role)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            role = User.FindFirstValue("role") ?? string.Empty;
+            role = User.FindFirstValue("role") ?? User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out userId))
             {
@@ -374,6 +374,11 @@ namespace CRM.Api.Controllers
         {
             try
             {
+                if (quotationId == Guid.Empty)
+                {
+                    return BadRequest(new { error = "Invalid quotation ID" });
+                }
+
                 var query = new GetQuotationApprovalsQuery
                 {
                     QuotationId = quotationId
@@ -382,9 +387,13 @@ namespace CRM.Api.Controllers
                 var result = await _getQuotationApprovalsHandler.Handle(query);
                 return Ok(new { success = true, data = result });
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return StatusCode(500, new { error = "An error occurred while retrieving quotation approvals", details = ex.Message });
             }
         }
 

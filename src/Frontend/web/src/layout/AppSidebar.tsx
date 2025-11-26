@@ -16,15 +16,22 @@ import {
   PlugInIcon,
   TableIcon,
   UserCircleIcon,
+  FileIcon,
+  DollarLineIcon,
+  CheckCircleIcon,
+  BellIcon,
+  ArrowDownIcon,
+  FolderIcon,
 } from "../icons/index";
-// removed promo widget
 import { getAccessToken, getRoleFromToken } from "@/lib/session";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 type NavItem = {
   name: string;
   icon: React.ReactNode;
   path?: string;
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
+  badge?: number;
 };
 
 const baseNavItems: NavItem[] = [
@@ -34,10 +41,75 @@ const baseNavItems: NavItem[] = [
     path: "/dashboard",
   },
   {
-    icon: <ListIcon />,
+    icon: <FolderIcon />,
     name: "Clients",
     path: "/clients",
   },
+  {
+    icon: <FileIcon />,
+    name: "Quotations",
+    path: "/quotations",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Templates",
+    path: "/templates",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Payments",
+    path: "/payments",
+  },
+  {
+    icon: <CheckCircleIcon />,
+    name: "Approvals",
+    path: "/approvals",
+  },
+  {
+    icon: <ArrowDownIcon />,
+    name: "Refunds",
+    path: "/refunds",
+  },
+  {
+    icon: <PieChartIcon />,
+    name: "Reports",
+    path: "/reports",
+  },
+  {
+    icon: <BellIcon />,
+    name: "Notifications",
+    path: "/notifications",
+  },
+];
+
+const adminNavItems: NavItem[] = [
+  {
+    icon: <PlugInIcon />,
+    name: "Admin",
+    path: "/admin",
+    subItems: [
+      { name: "System Settings", path: "/admin/settings/system" },
+      { name: "Company Details", path: "/admin/company-details" },
+      { name: "Audit Logs", path: "/admin/audit-logs" },
+      { name: "Branding", path: "/admin/branding" },
+      { name: "Localization", path: "/admin/localization" },
+      { name: "Currencies", path: "/admin/currencies" },
+      { name: "Integrations", path: "/admin/integrations" },
+      { name: "Data Retention", path: "/admin/data-retention" },
+      { name: "Notification Settings", path: "/admin/notifications" },
+      { name: "Suspicious Activity", path: "/admin/suspicious-activity" },
+      { name: "Template Stats", path: "/admin/templates/stats" },
+      { name: "Pending Templates", path: "/admin/templates/pending" },
+    ],
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Users",
+    path: "/users",
+  },
+];
+
+const othersItems: NavItem[] = [
   {
     icon: <UserCircleIcon />,
     name: "Profile",
@@ -45,30 +117,50 @@ const baseNavItems: NavItem[] = [
   },
 ];
 
-const othersItems: NavItem[] = [];
-
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     const token = getAccessToken();
-    const role = getRoleFromToken(token);
-    setIsAdmin(role === "Admin");
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+    setIsAdmin(userRole === "Admin");
   }, []);
 
   const navItems: NavItem[] = React.useMemo(() => {
     const items = [...baseNavItems];
+    
+    // Remove Templates for Manager role
+    if (role === "Manager") {
+      const templatesIndex = items.findIndex(item => item.path === "/templates");
+      if (templatesIndex !== -1) {
+        items.splice(templatesIndex, 1);
+      }
+    }
+    
+    // Remove Approvals for Admin role
+    if (role === "Admin") {
+      const approvalsIndex = items.findIndex(item => item.path === "/approvals");
+      if (approvalsIndex !== -1) {
+        items.splice(approvalsIndex, 1);
+      }
+    }
+    
+    // Add notification badge
+    const notificationsIndex = items.findIndex(item => item.path === "/notifications");
+    if (notificationsIndex !== -1) {
+      items[notificationsIndex] = { ...items[notificationsIndex], badge: unreadCount };
+    }
+    // Add admin items if admin
     if (isAdmin) {
-      items.splice(2, 0, {
-        icon: <TableIcon />,
-        name: "Users",
-        path: "/users",
-      });
+      items.push(...adminNavItems);
     }
     return items;
-  }, [isAdmin]);
+  }, [isAdmin, role, unreadCount]);
 
   const renderMenuItems = (
     navItems: NavItem[],
@@ -80,35 +172,35 @@ const AppSidebar: React.FC = () => {
           {nav.subItems ? (
             <button
               onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group  ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group w-full ${
                 openSubmenu?.type === menuType && openSubmenu?.index === index
-                  ? "menu-item-active"
-                  : "menu-item-inactive"
-              } cursor-pointer ${
-                !isExpanded && !isHovered
+                  ? "bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400"
+                  : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5"
+              } ${
+                !isExpanded && !isHovered && !isMobileOpen
                   ? "lg:justify-center"
-                  : "lg:justify-start"
+                  : "justify-start"
               }`}
             >
               <span
-                className={` ${
+                className={`flex items-center justify-center flex-shrink-0 ${
                   openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? "menu-item-icon-active"
-                    : "menu-item-icon-inactive"
+                    ? "text-brand-500 dark:text-brand-400"
+                    : "text-gray-500 dark:text-gray-400"
                 }`}
               >
                 {nav.icon}
               </span>
               {(isExpanded || isHovered || isMobileOpen) && (
-                <span className={`menu-item-text`}>{nav.name}</span>
+                <span className="flex-1 text-sm font-medium whitespace-nowrap text-left">{nav.name}</span>
               )}
               {(isExpanded || isHovered || isMobileOpen) && (
                 <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200  ${
+                  className={`ml-auto w-5 h-5 transition-transform duration-200 flex-shrink-0 ${
                     openSubmenu?.type === menuType &&
                     openSubmenu?.index === index
                       ? "rotate-180 text-brand-500"
-                      : ""
+                      : "text-gray-400"
                   }`}
                 />
               )}
@@ -117,21 +209,32 @@ const AppSidebar: React.FC = () => {
             nav.path && (
               <Link
                 href={nav.path}
-                className={`menu-item group ${
-                  isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
+                  isActive(nav.path)
+                    ? "bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400"
+                    : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5"
+                } ${
+                  !isExpanded && !isHovered && !isMobileOpen
+                    ? "lg:justify-center"
+                    : "justify-start"
                 }`}
               >
                 <span
-                  className={`${
+                  className={`flex items-center justify-center flex-shrink-0 ${
                     isActive(nav.path)
-                      ? "menu-item-icon-active"
-                      : "menu-item-icon-inactive"
+                      ? "text-brand-500 dark:text-brand-400"
+                      : "text-gray-500 dark:text-gray-400"
                   }`}
                 >
                   {nav.icon}
                 </span>
                 {(isExpanded || isHovered || isMobileOpen) && (
-                  <span className={`menu-item-text`}>{nav.name}</span>
+                  <span className="flex-1 text-sm font-medium whitespace-nowrap">{nav.name}</span>
+                )}
+                {nav.badge !== undefined && nav.badge > 0 && (isExpanded || isHovered || isMobileOpen) && (
+                  <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-error-500 text-[10px] font-bold text-white flex-shrink-0">
+                    {nav.badge > 99 ? "99+" : nav.badge}
+                  </span>
                 )}
               </Link>
             )
@@ -154,32 +257,32 @@ const AppSidebar: React.FC = () => {
                   <li key={subItem.name}>
                     <Link
                       href={subItem.path}
-                      className={`menu-dropdown-item ${
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                         isActive(subItem.path)
-                          ? "menu-dropdown-item-active"
-                          : "menu-dropdown-item-inactive"
+                          ? "bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400 font-medium"
+                          : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-white/5"
                       }`}
                     >
-                      {subItem.name}
-                      <span className="flex items-center gap-1 ml-auto">
+                      <span>{subItem.name}</span>
+                      <span className="flex items-center gap-1 ml-2">
                         {subItem.new && (
                           <span
-                            className={`ml-auto ${
+                            className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
                               isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
+                                ? "bg-brand-100 text-brand-600 dark:bg-brand-500/30 dark:text-brand-400"
+                                : "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400"
+                            }`}
                           >
                             new
                           </span>
                         )}
                         {subItem.pro && (
                           <span
-                            className={`ml-auto ${
+                            className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
                               isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
+                                ? "bg-brand-100 text-brand-600 dark:bg-brand-500/30 dark:text-brand-400"
+                                : "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400"
+                            }`}
                           >
                             pro
                           </span>
@@ -278,7 +381,7 @@ const AppSidebar: React.FC = () => {
       <div className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
         <Link href="/dashboard" className="select-none">
           <span className={`font-semibold text-gray-900 dark:text-white/90 ${isExpanded || isHovered || isMobileOpen ? "text-xl" : "text-base"}`}>
-            CRM Admin
+            Q-Manage
           </span>
         </Link>
       </div>
@@ -303,7 +406,7 @@ const AppSidebar: React.FC = () => {
             </div>
 
             {othersItems.length > 0 && (
-              <div className="">
+              <div className="mt-6">
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
                     !isExpanded && !isHovered

@@ -1,12 +1,10 @@
-using System;
+using MediatR;
 
-namespace CRM.Domain.Events
+namespace CRM.Domain.Events;
+
+public class NotificationRead : INotification
 {
-    public class NotificationRead
-    {
-        public Guid NotificationId { get; set; }
-        public Guid UserId { get; set; }
-        public DateTimeOffset ReadAt { get; set; }
-    }
+    public Guid NotificationId { get; set; }
+    public Guid UserId { get; set; }
+    public DateTimeOffset ReadAt { get; set; }
 }
-

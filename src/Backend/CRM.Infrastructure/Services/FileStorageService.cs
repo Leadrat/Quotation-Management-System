@@ -31,6 +31,32 @@ namespace CRM.Infrastructure.Services
             return filePath;
         }
 
+        public async Task<string> SaveFileAsync(Microsoft.AspNetCore.Http.IFormFile file, string folderName)
+        {
+            if (file == null || file.Length == 0)
+                throw new ArgumentException("File is empty");
+
+            // Use wwwroot/uploads for templates, distinct from exports
+            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", folderName);
+            if (!Directory.Exists(uploadsPath))
+            {
+                Directory.CreateDirectory(uploadsPath);
+            }
+
+            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            var filePath = Path.Combine(uploadsPath, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            _logger.LogInformation("File uploaded: {FilePath}, Size: {Size} bytes", filePath, file.Length);
+            // Return absolute path or relative path depending on need. 
+            // For now returning absolute path as DocumentProcessingService needs it.
+            return filePath; 
+        }
+
         public async Task<byte[]> GetFileAsync(string filePath)
         {
             if (!File.Exists(filePath))

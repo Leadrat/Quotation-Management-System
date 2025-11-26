@@ -1,3 +1,4 @@
+using CRM.Domain.Entities;
 using System.Threading.Tasks;
 using CRM.Domain.Events;
 using CRM.Application.Common.Persistence;
@@ -31,7 +32,7 @@ namespace CRM.Application.Refunds.EventHandlers
                 var requester = await _db.Users.FindAsync(adjustment.RequestedByUserId);
                 if (requester != null)
                 {
-                    var notification = new Domain.Entities.Notification
+                    var notification = new UserNotification
                     {
                         NotificationId = System.Guid.NewGuid(),
                         RecipientUserId = requester.UserId,

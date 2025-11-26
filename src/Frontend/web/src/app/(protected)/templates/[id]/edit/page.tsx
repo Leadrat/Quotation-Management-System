@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TemplatesApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { LineItemsEditor, TemplatePreview } from "@/components/templates";
 import type {
   QuotationTemplate,
@@ -17,6 +18,7 @@ export default function EditTemplatePage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [template, setTemplate] = useState<QuotationTemplate | null>(null);
+  
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<"Public" | "Team" | "Private">("Private");
@@ -27,10 +29,19 @@ export default function EditTemplatePage() {
   const [previewTemplate, setPreviewTemplate] = useState<QuotationTemplate | null>(null);
 
   useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    
+    // Redirect managers away from editing - Admin and SalesRep can access
+    if (userRole !== "Admin" && userRole !== "SalesRep") {
+      router.replace("/dashboard");
+      return;
+    }
+    
     if (templateId) {
       loadTemplate();
     }
-  }, [templateId]);
+  }, [templateId, router]);
 
   const loadTemplate = async () => {
     try {
@@ -269,7 +280,7 @@ export default function EditTemplatePage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded bg-primary px-6 py-2.5 font-medium text-white hover:bg-opacity-90 disabled:opacity-50"
+            className="rounded border border-blue-500 bg-transparent px-6 py-2.5 font-medium text-black hover:bg-blue-50 disabled:opacity-50"
           >
             {loading ? "Updating..." : "Update Template"}
           </button>

@@ -32,7 +32,17 @@ export default function AdminLocalizationPage() {
         LocalizationApi.getLocalizationResources(selectedLanguage),
       ]);
       setLanguages(langs.filter(l => l.isActive));
-      setResources(res);
+      // Convert Record<string, string> to LocalizationResource[]
+      // Note: This is a temporary fix - the API should return full resources with IDs
+      const resourcesArray: LocalizationResource[] = Object.entries(res).map(([key, value], index) => ({
+        resourceId: `temp-${index}`, // Temporary ID - should come from API
+        languageCode: selectedLanguage,
+        resourceKey: key,
+        resourceValue: value,
+        category: key.split('.').slice(0, -1).join('.') || undefined,
+        isActive: true,
+      }));
+      setResources(resourcesArray);
     } catch (error) {
       console.error("Failed to load data", error);
     } finally {

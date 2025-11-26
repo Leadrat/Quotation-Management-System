@@ -96,6 +96,9 @@ export default function IntegrationKeysPage() {
       {error && (
         <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           {error}
+          {error.includes("409") && (
+            <p className="mt-2 text-sm">This may indicate a duplicate key or conflict. Please check your integration keys.</p>
+          )}
         </div>
       )}
 
@@ -118,7 +121,7 @@ export default function IntegrationKeysPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {keys.length === 0 ? (
+            {!keys || !Array.isArray(keys) || keys.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                   No integration keys found. Click "Add Key" to create one.

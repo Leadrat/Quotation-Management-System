@@ -5,12 +5,12 @@ namespace CRM.Application.Notifications.Services
 {
     public class QuotationExpiredTemplate : BaseNotificationTemplate
     {
-        public override string GetSubject(Notification notification)
+        public override string GetSubject(UserNotification notification)
         {
             return ReplacePlaceholders("Quotation {QuotationNumber} Has Expired", notification);
         }
 
-        public override string GetBody(Notification notification)
+        public override string GetBody(UserNotification notification)
         {
             return ReplacePlaceholders(@"
                 <h2>Quotation Expired</h2>

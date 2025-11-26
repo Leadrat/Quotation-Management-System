@@ -8,6 +8,7 @@ namespace CRM.Domain.Entities
     public class Payment
     {
         public Guid PaymentId { get; set; }
+        public Guid TenantId { get; set; }
         public Guid QuotationId { get; set; }
         public string PaymentGateway { get; set; } = string.Empty;
         public string PaymentReference { get; set; } = string.Empty;
@@ -25,6 +26,7 @@ namespace CRM.Domain.Entities
         public string? Metadata { get; set; } // JSON string for additional data
 
         // Navigation properties
+        public virtual Tenant? Tenant { get; set; }
         public virtual Quotation Quotation { get; set; } = null!;
 
         // Domain methods

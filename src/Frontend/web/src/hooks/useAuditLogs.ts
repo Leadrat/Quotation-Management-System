@@ -32,12 +32,14 @@ export function useAuditLogs() {
         pageNumber,
         pageSize,
       });
-      setLogs(response.data);
-      setPageNumber(response.pageNumber);
-      setPageSize(response.pageSize);
-      setTotalCount(response.totalCount);
+      // Ensure logs is always an array
+      setLogs(Array.isArray(response.data) ? response.data : []);
+      setPageNumber(response.pageNumber || pageNumber);
+      setPageSize(response.pageSize || pageSize);
+      setTotalCount(response.totalCount || 0);
     } catch (err: any) {
       setError(err.message || "Failed to load audit logs");
+      setLogs([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

@@ -1,0 +1,1190 @@
+openapi: 3.0.3
+info:
+  title: CRM API - Tax Management
+  version: 1.0.0
+  description: Multi-country and multi-jurisdiction tax management endpoints for Spec-020
+servers:
+  - url: https://api.crm.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  # Countries
+  /admin/tax/countries:
+    get:
+      summary: List all countries
+      tags: [Tax Management - Countries]
+      parameters:
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+          description: Filter by active status
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCountryResult'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+    post:
+      summary: Create country
+      tags: [Tax Management - Countries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCountryRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /admin/tax/countries/{countryId}:
+    get:
+      summary: Get country by ID
+      tags: [Tax Management - Countries]
+      parameters:
+        - in: path
+          name: countryId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    put:
+      summary: Update country
+      tags: [Tax Management - Countries]
+      parameters:
+        - in: path
+          name: countryId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCountryRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    delete:
+      summary: Delete country (soft delete)
+      tags: [Tax Management - Countries]
+      parameters:
+        - in: path
+          name: countryId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: No Content }
+        '400': { description: Cannot delete - country in use }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+  /admin/tax/countries/{countryId}/jurisdictions:
+    get:
+      summary: List jurisdictions for a country
+      tags: [Tax Management - Jurisdictions]
+      parameters:
+        - in: path
+          name: countryId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JurisdictionResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Country not found }
+
+  # Jurisdictions
+  /admin/tax/jurisdictions:
+    post:
+      summary: Create jurisdiction
+      tags: [Tax Management - Jurisdictions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJurisdictionRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JurisdictionResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /admin/tax/jurisdictions/{jurisdictionId}:
+    get:
+      summary: Get jurisdiction by ID
+      tags: [Tax Management - Jurisdictions]
+      parameters:
+        - in: path
+          name: jurisdictionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JurisdictionResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    put:
+      summary: Update jurisdiction
+      tags: [Tax Management - Jurisdictions]
+      parameters:
+        - in: path
+          name: jurisdictionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateJurisdictionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JurisdictionResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    delete:
+      summary: Delete jurisdiction (soft delete)
+      tags: [Tax Management - Jurisdictions]
+      parameters:
+        - in: path
+          name: jurisdictionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: No Content }
+        '400': { description: Cannot delete - jurisdiction in use }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+
+  # Tax Frameworks
+  /admin/tax/frameworks:
+    get:
+      summary: List all tax frameworks
+      tags: [Tax Management - Frameworks]
+      parameters:
+        - in: query
+          name: countryId
+          schema: { type: string, format: uuid }
+          description: Filter by country
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxFrameworkResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+    post:
+      summary: Create tax framework
+      tags: [Tax Management - Frameworks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaxFrameworkRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxFrameworkResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /admin/tax/frameworks/{frameworkId}:
+    get:
+      summary: Get tax framework by ID
+      tags: [Tax Management - Frameworks]
+      parameters:
+        - in: path
+          name: frameworkId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxFrameworkResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    put:
+      summary: Update tax framework
+      tags: [Tax Management - Frameworks]
+      parameters:
+        - in: path
+          name: frameworkId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaxFrameworkRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxFrameworkResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+
+  # Tax Rates
+  /admin/tax/rates:
+    get:
+      summary: List tax rates (with filters)
+      tags: [Tax Management - Rates]
+      parameters:
+        - in: query
+          name: jurisdictionId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: taxFrameworkId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: categoryId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: effectiveDate
+          schema: { type: string, format: date }
+          description: Get rates effective on this date
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedTaxRateResult'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+    post:
+      summary: Create tax rate
+      tags: [Tax Management - Rates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaxRateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /admin/tax/rates/{rateId}:
+    get:
+      summary: Get tax rate by ID
+      tags: [Tax Management - Rates]
+      parameters:
+        - in: path
+          name: rateId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    put:
+      summary: Update tax rate
+      tags: [Tax Management - Rates]
+      parameters:
+        - in: path
+          name: rateId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaxRateRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    delete:
+      summary: Delete tax rate
+      tags: [Tax Management - Rates]
+      parameters:
+        - in: path
+          name: rateId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: No Content }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+
+  # Product/Service Categories
+  /admin/tax/categories:
+    get:
+      summary: List all product/service categories
+      tags: [Tax Management - Categories]
+      parameters:
+        - in: query
+          name: isActive
+          schema: { type: boolean }
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCategoryResult'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+    post:
+      summary: Create product/service category
+      tags: [Tax Management - Categories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /admin/tax/categories/{categoryId}:
+    get:
+      summary: Get category by ID
+      tags: [Tax Management - Categories]
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+    put:
+      summary: Update category
+      tags: [Tax Management - Categories]
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+        '404': { description: Not Found }
+
+  # Tax Calculation
+  /admin/tax/preview-calculation:
+    post:
+      summary: Preview tax calculation for test data
+      tags: [Tax Management - Calculation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewTaxCalculationRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxCalculationResult'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+  /tax/calculate:
+    post:
+      summary: Calculate tax for quotation (used by quotation service)
+      tags: [Tax Management - Calculation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculateTaxRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxCalculationResult'
+        '400': { description: Validation failed }
+        '401': { description: Unauthorized }
+
+  # Tax Audit Log
+  /admin/tax/audit-log:
+    get:
+      summary: View tax calculation audit log
+      tags: [Tax Management - Audit]
+      parameters:
+        - in: query
+          name: quotationId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: countryId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: jurisdictionId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: actionType
+          schema: { type: string, enum: [Calculation, ConfigurationChange] }
+        - in: query
+          name: dateFrom
+          schema: { type: string, format: date }
+        - in: query
+          name: dateTo
+          schema: { type: string, format: date }
+        - in: query
+          name: pageNumber
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 10, maximum: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAuditLogResult'
+        '401': { description: Unauthorized }
+        '403': { description: Forbidden - Admin role required }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    # Country
+    CreateCountryRequest:
+      type: object
+      required: [countryName, countryCode, taxFrameworkType, defaultCurrency]
+      properties:
+        countryName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: India
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          example: IN
+        taxFrameworkType:
+          type: string
+          enum: [GST, VAT]
+          example: GST
+        defaultCurrency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: INR
+        isActive:
+          type: boolean
+          default: true
+        isDefault:
+          type: boolean
+          default: false
+    UpdateCountryRequest:
+      type: object
+      properties:
+        countryName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        taxFrameworkType:
+          type: string
+          enum: [GST, VAT]
+        defaultCurrency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        isActive:
+          type: boolean
+        isDefault:
+          type: boolean
+    CountryResponse:
+      type: object
+      properties:
+        countryId:
+          type: string
+          format: uuid
+        countryName:
+          type: string
+        countryCode:
+          type: string
+        taxFrameworkType:
+          type: string
+        defaultCurrency:
+          type: string
+        isActive:
+          type: boolean
+        isDefault:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PagedCountryResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountryResponse'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    # Jurisdiction
+    CreateJurisdictionRequest:
+      type: object
+      required: [countryId, jurisdictionName]
+      properties:
+        countryId:
+          type: string
+          format: uuid
+        parentJurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        jurisdictionName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Maharashtra
+        jurisdictionCode:
+          type: string
+          maxLength: 20
+          example: "27"
+        jurisdictionType:
+          type: string
+          enum: [State, City, Emirate, Province]
+          example: State
+        isActive:
+          type: boolean
+          default: true
+    UpdateJurisdictionRequest:
+      type: object
+      properties:
+        jurisdictionName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        jurisdictionCode:
+          type: string
+          maxLength: 20
+        jurisdictionType:
+          type: string
+          enum: [State, City, Emirate, Province]
+        isActive:
+          type: boolean
+    JurisdictionResponse:
+      type: object
+      properties:
+        jurisdictionId:
+          type: string
+          format: uuid
+        countryId:
+          type: string
+          format: uuid
+        parentJurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        jurisdictionName:
+          type: string
+        jurisdictionCode:
+          type: string
+          nullable: true
+        jurisdictionType:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Tax Framework
+    TaxComponent:
+      type: object
+      required: [name, code, isCentrallyGoverned]
+      properties:
+        name:
+          type: string
+          example: CGST
+        code:
+          type: string
+          example: CGST
+        isCentrallyGoverned:
+          type: boolean
+        description:
+          type: string
+    CreateTaxFrameworkRequest:
+      type: object
+      required: [countryId, frameworkName, frameworkType, taxComponents]
+      properties:
+        countryId:
+          type: string
+          format: uuid
+        frameworkName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Goods and Services Tax
+        frameworkType:
+          type: string
+          enum: [GST, VAT]
+          example: GST
+        description:
+          type: string
+        taxComponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponent'
+    UpdateTaxFrameworkRequest:
+      type: object
+      properties:
+        frameworkName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        frameworkType:
+          type: string
+          enum: [GST, VAT]
+        description:
+          type: string
+        taxComponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponent'
+        isActive:
+          type: boolean
+    TaxFrameworkResponse:
+      type: object
+      properties:
+        taxFrameworkId:
+          type: string
+          format: uuid
+        countryId:
+          type: string
+          format: uuid
+        frameworkName:
+          type: string
+        frameworkType:
+          type: string
+        description:
+          type: string
+          nullable: true
+        taxComponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponent'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Tax Rate
+    TaxComponentRate:
+      type: object
+      required: [component, rate]
+      properties:
+        component:
+          type: string
+          example: CGST
+        rate:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          example: 9.0
+    CreateTaxRateRequest:
+      type: object
+      required: [taxFrameworkId, taxRate, effectiveFrom, taxComponents]
+      properties:
+        jurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        taxFrameworkId:
+          type: string
+          format: uuid
+        productServiceCategoryId:
+          type: string
+          format: uuid
+          nullable: true
+        taxRate:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          example: 18.0
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+          nullable: true
+        isExempt:
+          type: boolean
+          default: false
+        isZeroRated:
+          type: boolean
+          default: false
+        taxComponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponentRate'
+        description:
+          type: string
+    UpdateTaxRateRequest:
+      type: object
+      properties:
+        taxRate:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+          nullable: true
+        isExempt:
+          type: boolean
+        isZeroRated:
+          type: boolean
+        taxComponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponentRate'
+        description:
+          type: string
+    TaxRateResponse:
+      type: object
+      properties:
+        taxRateId:
+          type: string
+          format: uuid
+        jurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        taxFrameworkId:
+          type: string
+          format: uuid
+        productServiceCategoryId:
+          type: string
+          format: uuid
+          nullable: true
+        taxRate:
+          type: number
+          format: decimal
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: string
+          format: date
+          nullable: true
+        isExempt:
+          type: boolean
+        isZeroRated:
+          type: boolean
+        taxComponents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponentRate'
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PagedTaxRateResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxRateResponse'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    # Product/Service Category
+    CreateCategoryRequest:
+      type: object
+      required: [categoryName]
+      properties:
+        categoryName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Services
+        categoryCode:
+          type: string
+          maxLength: 20
+          example: SRV
+        description:
+          type: string
+        isActive:
+          type: boolean
+          default: true
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        categoryName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        categoryCode:
+          type: string
+          maxLength: 20
+        description:
+          type: string
+        isActive:
+          type: boolean
+    CategoryResponse:
+      type: object
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        categoryCode:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PagedCategoryResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+
+    # Tax Calculation
+    LineItemTaxInput:
+      type: object
+      required: [amount]
+      properties:
+        productServiceCategoryId:
+          type: string
+          format: uuid
+          nullable: true
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 25000.00
+    PreviewTaxCalculationRequest:
+      type: object
+      required: [countryId, lineItems]
+      properties:
+        countryId:
+          type: string
+          format: uuid
+        jurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        calculationDate:
+          type: string
+          format: date
+          default: today
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemTaxInput'
+    CalculateTaxRequest:
+      type: object
+      required: [clientId, lineItems]
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        calculationDate:
+          type: string
+          format: date
+          default: today
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItemTaxInput'
+    TaxComponentBreakdown:
+      type: object
+      properties:
+        component:
+          type: string
+          example: CGST
+        rate:
+          type: number
+          format: decimal
+          example: 9.0
+        amount:
+          type: number
+          format: decimal
+          example: 4050.00
+    TaxCalculationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        countryId:
+          type: string
+          format: uuid
+        jurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        taxFrameworkId:
+          type: string
+          format: uuid
+        subtotal:
+          type: number
+          format: decimal
+        discountAmount:
+          type: number
+          format: decimal
+        taxableAmount:
+          type: number
+          format: decimal
+        taxBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxComponentBreakdown'
+        totalTax:
+          type: number
+          format: decimal
+        totalAmount:
+          type: number
+          format: decimal
+
+    # Audit Log
+    AuditLogResponse:
+      type: object
+      properties:
+        logId:
+          type: string
+          format: uuid
+        quotationId:
+          type: string
+          format: uuid
+          nullable: true
+        actionType:
+          type: string
+          enum: [Calculation, ConfigurationChange]
+        countryId:
+          type: string
+          format: uuid
+          nullable: true
+        jurisdictionId:
+          type: string
+          format: uuid
+          nullable: true
+        calculationDetails:
+          type: object
+        changedByUserId:
+          type: string
+          format: uuid
+        changedAt:
+          type: string
+          format: date-time
+    PagedAuditLogResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogResponse'
+        pageNumber:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+

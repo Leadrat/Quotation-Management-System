@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using CRM.Domain.Entities;
+using CRM.Domain.Imports;
 using CRM.Domain.Admin;
+using CRM.Domain.UserManagement;
 using CRM.Application.Common.Persistence;
 
 namespace CRM.Infrastructure.Persistence;
@@ -11,6 +13,7 @@ public class AppDbContext : DbContext, IAppDbContext
     {
     }
 
+    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
@@ -28,12 +31,21 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<QuotationResponse> QuotationResponses => Set<QuotationResponse>();
     public DbSet<ClientPortalOtp> ClientPortalOtps => Set<ClientPortalOtp>();
     public DbSet<QuotationPageView> QuotationPageViews => Set<QuotationPageView>();
+    public DbSet<DocumentTemplate> DocumentTemplates { get; set; }
     public DbSet<QuotationTemplate> QuotationTemplates => Set<QuotationTemplate>();
     public DbSet<QuotationTemplateLineItem> QuotationTemplateLineItems => Set<QuotationTemplateLineItem>();
+    public DbSet<TemplatePlaceholder> TemplatePlaceholders => Set<TemplatePlaceholder>();
     public DbSet<DiscountApproval> DiscountApprovals => Set<DiscountApproval>();
-    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<UserNotification> Notifications => Set<UserNotification>();
+    public DbSet<NotificationType> NotificationTypes => Set<NotificationType>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<EmailNotificationLog> EmailNotificationLogs => Set<EmailNotificationLog>();
+    public DbSet<NotificationDispatchAttempt> NotificationDispatchAttempts => Set<NotificationDispatchAttempt>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<NotificationChannelConfiguration> NotificationChannelConfigurations => Set<NotificationChannelConfiguration>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<NotificationOperationLog> NotificationOperationLogs => Set<NotificationOperationLog>();
+    public DbSet<NotificationAlert> NotificationAlerts => Set<NotificationAlert>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentGatewayConfig> PaymentGatewayConfigs => Set<PaymentGatewayConfig>();
     public DbSet<AnalyticsMetricsSnapshot> AnalyticsMetricsSnapshots => Set<AnalyticsMetricsSnapshot>();
@@ -55,6 +67,42 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<CustomBranding> CustomBranding => Set<CustomBranding>();
     public DbSet<DataRetentionPolicy> DataRetentionPolicies => Set<DataRetentionPolicy>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+
+    // Company Details
+    public DbSet<CompanyDetails> CompanyDetails => Set<CompanyDetails>();
+    public DbSet<BankDetails> BankDetails => Set<BankDetails>();
+    
+    // Country-Specific Identifiers & Bank Details
+    public DbSet<IdentifierType> IdentifierTypes => Set<IdentifierType>();
+    public DbSet<CountryIdentifierConfiguration> CountryIdentifierConfigurations => Set<CountryIdentifierConfiguration>();
+    public DbSet<BankFieldType> BankFieldTypes => Set<BankFieldType>();
+    public DbSet<CountryBankFieldConfiguration> CountryBankFieldConfigurations => Set<CountryBankFieldConfiguration>();
+
+    // User Management
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<UserGroup> UserGroups => Set<UserGroup>();
+    public DbSet<UserGroupMember> UserGroupMembers => Set<UserGroupMember>();
+    public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
+    public DbSet<UserActivity> UserActivities => Set<UserActivity>();
+    public DbSet<Mention> Mentions => Set<Mention>();
+
+    // Tax Management
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<Jurisdiction> Jurisdictions => Set<Jurisdiction>();
+    public DbSet<TaxFramework> TaxFrameworks => Set<TaxFramework>();
+    public DbSet<TaxRate> TaxRates => Set<TaxRate>();
+    public DbSet<ProductServiceCategory> ProductServiceCategories => Set<ProductServiceCategory>();
+    public DbSet<TaxCalculationLog> TaxCalculationLogs => Set<TaxCalculationLog>();
+
+    // Product Catalog
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<ProductPriceHistory> ProductPriceHistory => Set<ProductPriceHistory>();
+    
+    // Imports
+    public DbSet<ImportSession> ImportSessions => Set<ImportSession>();
+    public DbSet<ImportedTemplate> ImportedTemplates => Set<ImportedTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

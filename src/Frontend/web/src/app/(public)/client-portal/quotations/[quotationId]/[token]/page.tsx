@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ClientPortalApi, RefundsApi, PaymentsApi } from "@/lib/api";
+import { ClientPortalApi, RefundsApi, PaymentsApi, API_BASE } from "@/lib/api";
 import { formatCurrency, formatDate, getStatusLabel } from "@/utils/quotationFormatter";
 import { ClientResponseModal } from "@/components/quotations";
 import { RefundRequestForm } from "@/components/refunds";
@@ -33,6 +33,8 @@ export default function ClientPortalQuotationPage() {
   const [linkValidated, setLinkValidated] = useState(false);
   const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
   const [acceptedPopupShown, setAcceptedPopupShown] = useState(false);
+  const [templatePreview, setTemplatePreview] = useState<{ hasTemplate: boolean; templateName?: string; content?: string } | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
 
   // Validate access link on page load
   useEffect(() => {
@@ -138,12 +140,38 @@ export default function ClientPortalQuotationPage() {
     }
   };
 
+  const loadTemplatePreview = async () => {
+    try {
+      setTemplateLoading(true);
+      const result = await ClientPortalApi.getQuotationTemplatePreview(quotationId, accessToken);
+      if (result.hasTemplate) {
+        setTemplatePreview({
+          hasTemplate: true,
+          templateName: result.templateName,
+          content: result.content
+        });
+      } else {
+        setTemplatePreview({ hasTemplate: false });
+      }
+    } catch (err: any) {
+      console.error("Failed to load template preview:", err);
+      setTemplatePreview({ hasTemplate: false });
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
   const loadQuotation = async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await ClientPortalApi.getQuotation(quotationId, accessToken);
       setQuotation(res.data);
+      
+      // Load template preview if template exists
+      if (res.data.templateId) {
+        await loadTemplatePreview();
+      }
       
       // Try to load payment if quotation is accepted
       if (res.data?.status === "ACCEPTED") {
@@ -155,8 +183,8 @@ export default function ClientPortalQuotationPage() {
         
         try {
           const paymentRes = await PaymentsApi.getByQuotation(quotationId);
-          if (paymentRes?.data && paymentRes.data.length > 0) {
-            setPayment(paymentRes.data[0]);
+          if (paymentRes && paymentRes.length > 0) {
+            setPayment(paymentRes[0]);
           }
         } catch (err) {
           // Payment not found or not accessible - that's okay
@@ -194,9 +222,9 @@ export default function ClientPortalQuotationPage() {
       // Initiate payment request
       const paymentRequest = await PaymentsApi.initiate({
         quotationId: quotationId,
+        paymentGateway: "razorpay", // Default gateway - could be made configurable
         amount: quotation?.totalAmount || 0,
         currency: "INR",
-        description: `Payment for Quotation #${quotation?.quotationNumber}`,
       });
       
       setSuccessMessage("Payment link has been requested. You will receive it via email shortly.");
@@ -279,7 +307,7 @@ export default function ClientPortalQuotationPage() {
           <button
             onClick={handleRequestOtp}
             disabled={loading || !email}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary/90 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full rounded border-2 border-blue-500 bg-white px-4 py-2 font-semibold text-black hover:bg-blue-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:border-blue-500 dark:hover:bg-blue-50"
           >
             {loading ? "Sending..." : "Send Verification Code"}
           </button>
@@ -329,7 +357,7 @@ export default function ClientPortalQuotationPage() {
             <button
               onClick={handleVerifyOtp}
               disabled={loading || otpCode.length !== 6}
-              className="flex-1 rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary/90 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex-1 rounded border-2 border-blue-500 bg-white px-4 py-2 font-semibold text-black hover:bg-blue-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:border-blue-500 dark:hover:bg-blue-50"
             >
               {loading ? "Verifying..." : "Verify Code"}
             </button>
@@ -403,13 +431,98 @@ export default function ClientPortalQuotationPage() {
         <section className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="rounded-lg border border-gray-200 p-4">
             <h2 className="mb-3 font-semibold text-black">Company</h2>
-            <p className="text-sm text-gray-600">Your Company Name</p>
-            <p className="text-sm text-gray-600">sales@example.com</p>
-            <p className="text-sm text-gray-600">+1 (555) 123-4567</p>
+            {quotation.companyDetails ? (
+              <>
+                {quotation.companyDetails.logoUrl && (
+                  <div className="mb-3">
+                    <img 
+                      src={quotation.companyDetails.logoUrl.startsWith('http') 
+                        ? quotation.companyDetails.logoUrl 
+                        : `${API_BASE}${quotation.companyDetails.logoUrl}`} 
+                      alt={quotation.companyDetails.companyName || "Company Logo"} 
+                      className="h-16 max-w-xs object-contain"
+                      onError={(e) => {
+                        // Hide image if it fails to load
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+                {quotation.companyDetails.companyName && (
+                  <p className="text-sm font-medium text-black">{quotation.companyDetails.companyName}</p>
+                )}
+                {quotation.companyDetails.companyAddress && (
+                  <p className="text-sm text-gray-600">{quotation.companyDetails.companyAddress}</p>
+                )}
+                {(quotation.companyDetails.city || quotation.companyDetails.state || quotation.companyDetails.postalCode || quotation.companyDetails.country) && (
+                  <p className="text-sm text-gray-600">
+                    {[
+                      quotation.companyDetails.city,
+                      quotation.companyDetails.state,
+                      quotation.companyDetails.postalCode,
+                      quotation.companyDetails.country
+                    ].filter(Boolean).join(", ")}
+                  </p>
+                )}
+                {quotation.companyDetails.contactEmail && (
+                  <p className="text-sm text-gray-600">Email: {quotation.companyDetails.contactEmail}</p>
+                )}
+                {quotation.companyDetails.contactPhone && (
+                  <p className="text-sm text-gray-600">Phone: {quotation.companyDetails.contactPhone}</p>
+                )}
+                {quotation.companyDetails.website && (
+                  <p className="text-sm text-gray-600">Website: {quotation.companyDetails.website}</p>
+                )}
+                {(quotation.companyDetails.panNumber || quotation.companyDetails.gstNumber) && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    {quotation.companyDetails.panNumber && (
+                      <p className="text-xs text-gray-500">PAN: {quotation.companyDetails.panNumber}</p>
+                    )}
+                    {quotation.companyDetails.gstNumber && (
+                      <p className="text-xs text-gray-500">GST: {quotation.companyDetails.gstNumber}</p>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600">Your Company Name</p>
+                <p className="text-sm text-gray-600">sales@example.com</p>
+                <p className="text-sm text-gray-600">+1 (555) 123-4567</p>
+              </>
+            )}
           </div>
           <div className="rounded-lg border border-gray-200 p-4">
             <h2 className="mb-3 font-semibold text-black">Bill To</h2>
-            <p className="text-sm text-gray-600">{quotation.clientName}</p>
+            {quotation.clientName && (
+              <p className="text-sm font-medium text-black">{quotation.clientName}</p>
+            )}
+            {quotation.contactName && (
+              <p className="text-sm text-gray-600">Contact: {quotation.contactName}</p>
+            )}
+            {quotation.clientAddress && (
+              <p className="text-sm text-gray-600">{quotation.clientAddress}</p>
+            )}
+            {(quotation.clientCity || quotation.clientState || quotation.clientPinCode) && (
+              <p className="text-sm text-gray-600">
+                {[
+                  quotation.clientCity,
+                  quotation.clientState,
+                  quotation.clientPinCode
+                ].filter(Boolean).join(", ")}
+              </p>
+            )}
+            {quotation.clientEmail && (
+              <p className="text-sm text-gray-600">Email: {quotation.clientEmail}</p>
+            )}
+            {quotation.clientMobile && (
+              <p className="text-sm text-gray-600">
+                Phone: {quotation.clientPhoneCode ? `${quotation.clientPhoneCode} ` : ""}{quotation.clientMobile}
+              </p>
+            )}
+            {quotation.clientGstin && (
+              <p className="text-sm text-gray-600">GSTIN: {quotation.clientGstin}</p>
+            )}
           </div>
         </section>
 
@@ -467,6 +580,22 @@ export default function ClientPortalQuotationPage() {
               </div>
             </div>
           </div>
+          {/* Template Preview - Intro & Terms */}
+          {templatePreview?.hasTemplate && templatePreview.content && (
+            <div className="mb-4 space-y-4">
+              {templateLoading ? (
+                <div className="rounded-lg border border-gray-200 bg-white p-6">
+                  <div className="py-4 text-center text-gray-500">Loading template content...</div>
+                </div>
+              ) : (
+                <div 
+                  className="template-sections"
+                  dangerouslySetInnerHTML={{ __html: templatePreview.content }}
+                />
+              )}
+            </div>
+          )}
+
           {quotation.notes && (
             <div className="rounded-lg border border-gray-200 p-4">
               <h3 className="mb-2 font-semibold text-black">Notes</h3>
@@ -474,6 +603,51 @@ export default function ClientPortalQuotationPage() {
             </div>
           )}
         </section>
+
+        {/* Company Details Section - Bank Details & Legal Disclaimer */}
+        {quotation.companyDetails && (
+          <section className="mb-6 rounded-lg border border-gray-200 p-4">
+            <h3 className="mb-4 text-lg font-semibold text-black">Company Information</h3>
+            
+            {/* Bank Details - Show based on client country */}
+            {quotation.companyDetails.bankDetails && quotation.companyDetails.bankDetails.length > 0 && (
+              <div className="mb-4">
+                <h4 className="mb-2 text-sm font-semibold text-black">Bank Details</h4>
+                {(() => {
+                  // Determine client country - default to India, or check if we can infer from quotation
+                  const clientCountry = "India"; // Default - could be enhanced to detect from client data
+                  const bankDetails = quotation.companyDetails.bankDetails.find(
+                    (bd: any) => bd.country?.toLowerCase() === clientCountry.toLowerCase()
+                  ) || quotation.companyDetails.bankDetails[0]; // Fallback to first if country match not found
+                  
+                  return bankDetails ? (
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <p><strong>Bank:</strong> {bankDetails.bankName}{bankDetails.branchName ? `, ${bankDetails.branchName}` : ""}</p>
+                      <p><strong>Account Number:</strong> {bankDetails.accountNumber}</p>
+                      {bankDetails.country === "India" && bankDetails.ifscCode && (
+                        <p><strong>IFSC Code:</strong> {bankDetails.ifscCode}</p>
+                      )}
+                      {bankDetails.country === "Dubai" && bankDetails.iban && (
+                        <p><strong>IBAN:</strong> {bankDetails.iban}</p>
+                      )}
+                      {bankDetails.country === "Dubai" && bankDetails.swiftCode && (
+                        <p><strong>SWIFT Code:</strong> {bankDetails.swiftCode}</p>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            )}
+
+            {/* Legal Disclaimer */}
+            {quotation.companyDetails.legalDisclaimer && (
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="mb-2 text-sm font-semibold text-black">Legal Disclaimer</h4>
+                <p className="text-xs italic text-gray-600">{quotation.companyDetails.legalDisclaimer}</p>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Payment & Refund Section */}
         {quotation.status && quotation.status === "ACCEPTED" && (
@@ -538,14 +712,9 @@ export default function ClientPortalQuotationPage() {
                 </button>
               </>
             )}
-            <button
-              onClick={handleDownload}
-              className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50"
-            >
-              Download PDF
-            </button>
+
             <a
-              href={`mailto:sales@example.com?subject=Quotation%20${quotation.quotationNumber}`}
+              href={`mailto:${quotation.companyDetails?.contactEmail || "sales@example.com"}?subject=Quotation%20${quotation.quotationNumber}`}
               className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50"
             >
               Contact Salesperson

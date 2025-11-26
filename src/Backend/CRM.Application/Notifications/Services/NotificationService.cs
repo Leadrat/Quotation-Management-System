@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Notifications.Dtos;
 using CRM.Domain.Entities;
@@ -15,13 +16,13 @@ namespace CRM.Application.Notifications.Services
     {
         private readonly IAppDbContext _db;
         private readonly IEmailNotificationService _emailNotificationService;
-        private readonly IRealTimeNotificationService? _realTimeNotificationService;
+        private readonly CRM.Application.Common.Interfaces.IRealTimeNotificationService? _realTimeNotificationService;
         private readonly ILogger<NotificationService> _logger;
 
         public NotificationService(
             IAppDbContext db,
             IEmailNotificationService emailNotificationService,
-            IRealTimeNotificationService? realTimeNotificationService,
+            CRM.Application.Common.Interfaces.IRealTimeNotificationService? realTimeNotificationService,
             ILogger<NotificationService> logger)
         {
             _db = db;
@@ -75,7 +76,7 @@ namespace CRM.Application.Notifications.Services
             }
 
             // Create notification
-            var notification = new Notification
+            var notification = new UserNotification
             {
                 NotificationId = Guid.NewGuid(),
                 RecipientUserId = recipientUserId,
@@ -135,7 +136,7 @@ namespace CRM.Application.Notifications.Services
                         ArchivedAt = notification.ArchivedAt,
                         Meta = notification.Meta
                     };
-                    await _realTimeNotificationService.SendToUserAsync(recipientUserId, dto);
+                    await _realTimeNotificationService.SendNotificationToUserAsync(recipientUserId, notification);
                 }
                 catch (Exception ex)
                 {

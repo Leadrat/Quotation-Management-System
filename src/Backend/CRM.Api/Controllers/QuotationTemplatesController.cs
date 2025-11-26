@@ -12,6 +12,9 @@ using CRM.Application.QuotationTemplates.Queries.Handlers;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace CRM.Api.Controllers
 {
@@ -21,6 +24,7 @@ namespace CRM.Api.Controllers
     public class QuotationTemplatesController : ControllerBase
     {
         private readonly CreateQuotationTemplateCommandHandler _createHandler;
+        private readonly UploadQuotationTemplateCommandHandler _uploadHandler;
         private readonly UpdateQuotationTemplateCommandHandler _updateHandler;
         private readonly DeleteQuotationTemplateCommandHandler _deleteHandler;
         private readonly RestoreQuotationTemplateCommandHandler _restoreHandler;
@@ -35,9 +39,11 @@ namespace CRM.Api.Controllers
         private readonly IValidator<UpdateQuotationTemplateRequest> _updateValidator;
         private readonly IValidator<ApproveQuotationTemplateCommand> _approveValidator;
         private readonly IValidator<ApplyTemplateToQuotationCommand> _applyValidator;
+        private readonly ILogger<QuotationTemplatesController> _logger;
 
         public QuotationTemplatesController(
             CreateQuotationTemplateCommandHandler createHandler,
+            UploadQuotationTemplateCommandHandler uploadHandler,
             UpdateQuotationTemplateCommandHandler updateHandler,
             DeleteQuotationTemplateCommandHandler deleteHandler,
             RestoreQuotationTemplateCommandHandler restoreHandler,
@@ -51,9 +57,11 @@ namespace CRM.Api.Controllers
             IValidator<CreateQuotationTemplateRequest> createValidator,
             IValidator<UpdateQuotationTemplateRequest> updateValidator,
             IValidator<ApproveQuotationTemplateCommand> approveValidator,
-            IValidator<ApplyTemplateToQuotationCommand> applyValidator)
+            IValidator<ApplyTemplateToQuotationCommand> applyValidator,
+            ILogger<QuotationTemplatesController> logger)
         {
             _createHandler = createHandler;
+            _uploadHandler = uploadHandler;
             _updateHandler = updateHandler;
             _deleteHandler = deleteHandler;
             _restoreHandler = restoreHandler;
@@ -68,6 +76,7 @@ namespace CRM.Api.Controllers
             _updateValidator = updateValidator;
             _approveValidator = approveValidator;
             _applyValidator = applyValidator;
+            _logger = logger;
         }
 
         private bool TryGetUserContext(out Guid userId, out string role)
@@ -85,10 +94,163 @@ namespace CRM.Api.Controllers
         }
 
         /// <summary>
+        /// Upload a file-based quotation template
+        /// </summary>
+        [HttpPost("upload")]
+        [Authorize(Roles = "Admin,SalesRep")]
+        [ProducesResponseType(typeof(QuotationTemplateDto), 201)]
+        public async Task<IActionResult> Upload([FromForm] UploadQuotationTemplateRequest request, [FromForm] IFormFile file)
+        {
+            try
+            {
+                _logger?.LogInformation("Template upload request received. File: {FileName}, Size: {FileSize}, ContentType: {ContentType}", 
+                    file?.FileName, file?.Length, file?.ContentType);
+
+                if (file == null || file.Length == 0)
+                {
+                    _logger?.LogWarning("Template upload failed: File is null or empty");
+                    return BadRequest(new { error = "File is required" });
+                }
+
+                if (!TryGetUserContext(out var userId, out var role))
+                {
+                    _logger?.LogWarning("Template upload failed: Invalid user context. UserId: {UserId}, Role: {Role}", userId, role);
+                    return Unauthorized(new { error = "Invalid user token" });
+                }
+
+                _logger?.LogInformation("Template upload - UserId: {UserId}, Role: {Role}, Request: {Request}", 
+                    userId, role, System.Text.Json.JsonSerializer.Serialize(request));
+
+                // Copy file stream to byte array to avoid disposal issues
+                // The IFormFile stream gets disposed when the request completes,
+                // so we need to copy it to memory first
+                _logger?.LogInformation("Template upload - Copying file stream to memory");
+                byte[] fileBytes;
+                try
+                {
+                    using (var sourceStream = file.OpenReadStream())
+                    {
+                        using var memoryStream = new MemoryStream();
+                        await sourceStream.CopyToAsync(memoryStream);
+                        fileBytes = memoryStream.ToArray();
+                        _logger?.LogInformation("Template upload - File stream copied. Size: {Size} bytes", fileBytes.Length);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Template upload - Error copying file stream: {Message}", ex.Message);
+                    return StatusCode(500, new { error = "Error reading file stream", details = ex.Message });
+                }
+
+                // Create a new MemoryStream from the byte array for the handler
+                // The handler will use this stream synchronously, so we need to keep it alive
+                var handlerStream = new MemoryStream(fileBytes);
+                handlerStream.Position = 0; // Ensure position is at the beginning
+                
+                _logger?.LogInformation("Template upload - Created MemoryStream. Length: {Length}, Position: {Position}", 
+                    handlerStream.Length, handlerStream.Position);
+
+                try
+                {
+                    _logger?.LogInformation("Template upload - Creating command and calling handler");
+                    var command = new UploadQuotationTemplateCommand
+                    {
+                        Request = request,
+                        FileStream = handlerStream,
+                        FileName = file.FileName,
+                        ContentType = file.ContentType,
+                        FileSize = file.Length,
+                        CreatedByUserId = userId
+                    };
+                    
+                    _logger?.LogInformation("Template upload - Command created. FileName: {FileName}, FileSize: {FileSize}, ContentType: {ContentType}", 
+                        command.FileName, command.FileSize, command.ContentType);
+
+                    _logger?.LogInformation("Template upload - Calling handler. Handler type: {HandlerType}", 
+                        _uploadHandler?.GetType().Name ?? "null");
+                    var result = await _uploadHandler.Handle(command);
+                    _logger?.LogInformation("Template upload - Handler completed successfully. TemplateId: {TemplateId}", 
+                        result?.TemplateId);
+                    return Created($"/api/v1/quotation-templates/{result.TemplateId}", new { success = true, data = result });
+                }
+                finally
+                {
+                    // Dispose the stream after handler completes
+                    handlerStream?.Dispose();
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                _logger?.LogWarning(ex, "Invalid argument in template upload: {Message}", ex.Message);
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidTemplateVisibilityException ex)
+            {
+                _logger?.LogWarning(ex, "Invalid template visibility: {Message}", ex.Message);
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger?.LogError(ex, "Invalid operation during template upload: {Message}, InnerException: {InnerException}", 
+                    ex.Message, ex.InnerException?.Message);
+                
+                // Check if it's a table missing error
+                if (ex.Message.Contains("does not exist") || ex.Message.Contains("42P01"))
+                {
+                    return StatusCode(500, new { 
+                        error = "Database table missing. Please run database migrations.",
+                        details = ex.Message,
+                        hint = "Run 'dotnet ef database update' in the CRM.Infrastructure project"
+                    });
+                }
+                
+                return BadRequest(new { error = ex.Message, details = ex.InnerException?.Message });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                _logger?.LogError(dbEx, "Database update error during template upload: {Message}, InnerException: {InnerException}", 
+                    dbEx.Message, dbEx.InnerException?.Message);
+                
+                if (dbEx.InnerException is Npgsql.PostgresException pgEx)
+                {
+                    if (pgEx.SqlState == "42P01")
+                    {
+                        return StatusCode(500, new { 
+                            error = "Database table missing. Please run database migrations.",
+                            details = pgEx.Message,
+                            hint = "Run 'dotnet ef database update' in the CRM.Infrastructure project"
+                        });
+                    }
+                    return StatusCode(500, new { 
+                        error = "Database error occurred", 
+                        details = pgEx.Message,
+                        sqlState = pgEx.SqlState
+                    });
+                }
+                
+                return StatusCode(500, new { 
+                    error = "Database error occurred while uploading template", 
+                    details = dbEx.Message,
+                    innerException = dbEx.InnerException?.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error uploading template: {Message}, StackTrace: {StackTrace}, Type: {ExceptionType}", 
+                    ex.Message, ex.StackTrace, ex.GetType().Name);
+                return StatusCode(500, new { 
+                    error = "An error occurred while uploading the template", 
+                    details = ex.Message,
+                    type = ex.GetType().Name
+                });
+            }
+        }
+
+        /// <summary>
         /// Create a new quotation template
         /// </summary>
         [HttpPost]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin,SalesRep")]
         [ProducesResponseType(typeof(QuotationTemplateDto), 201)]
         public async Task<IActionResult> Create([FromBody] CreateQuotationTemplateRequest request)
         {
@@ -128,7 +290,7 @@ namespace CRM.Api.Controllers
         /// Update an existing quotation template (creates new version)
         /// </summary>
         [HttpPut("{templateId}")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin,SalesRep")]
         [ProducesResponseType(typeof(QuotationTemplateDto), 200)]
         public async Task<IActionResult> Update(Guid templateId, [FromBody] UpdateQuotationTemplateRequest request)
         {
@@ -178,7 +340,7 @@ namespace CRM.Api.Controllers
         /// Get all quotation templates with pagination and filters
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin,SalesRep")]
         [ProducesResponseType(typeof(PagedResult<QuotationTemplateDto>), 200)]
         public async Task<IActionResult> GetAll(
             [FromQuery] int pageNumber = 1,
@@ -210,9 +372,22 @@ namespace CRM.Api.Controllers
                 var result = await _getAllHandler.Handle(query);
                 return Ok(new { success = true, data = result });
             }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException concurrencyEx)
+            {
+                // More specific exception - catch before DbUpdateException
+                return StatusCode(500, new { error = "Concurrency error occurred.", details = concurrencyEx.Message });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                // Database-related errors
+                return StatusCode(500, new { error = "Database error occurred. Please check if the QuotationTemplates table exists and migrations are applied.", details = dbEx.Message });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                // Log the full exception for debugging
+                var logger = HttpContext.RequestServices.GetService<Microsoft.Extensions.Logging.ILogger<QuotationTemplatesController>>();
+                logger?.LogError(ex, "Error in GetAll templates endpoint: {Error}", ex.Message);
+                return StatusCode(500, new { error = ex.Message, stackTrace = ex.StackTrace });
             }
         }
 
@@ -220,7 +395,7 @@ namespace CRM.Api.Controllers
         /// Get a quotation template by ID
         /// </summary>
         [HttpGet("{templateId}")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin,SalesRep")]
         [ProducesResponseType(typeof(QuotationTemplateDto), 200)]
         public async Task<IActionResult> GetById(Guid templateId)
         {
@@ -259,7 +434,7 @@ namespace CRM.Api.Controllers
         /// Soft delete a quotation template
         /// </summary>
         [HttpDelete("{templateId}")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(200)]
         public async Task<IActionResult> Delete(Guid templateId)
         {
@@ -298,7 +473,7 @@ namespace CRM.Api.Controllers
         /// Restore a deleted quotation template
         /// </summary>
         [HttpPost("{templateId}/restore")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(QuotationTemplateDto), 200)]
         public async Task<IActionResult> Restore(Guid templateId)
         {
@@ -387,7 +562,7 @@ namespace CRM.Api.Controllers
         /// Get version history for a template
         /// </summary>
         [HttpGet("{templateId}/versions")]
-        [Authorize(Roles = "SalesRep,Admin")]
+        [Authorize(Roles = "Admin,SalesRep")]
         [ProducesResponseType(typeof(System.Collections.Generic.List<QuotationTemplateVersionDto>), 200)]
         public async Task<IActionResult> GetVersions(Guid templateId)
         {
@@ -521,6 +696,12 @@ namespace CRM.Api.Controllers
                     return Unauthorized(new { error = "Invalid user token" });
                 }
 
+                // Ensure role is not empty (default to SalesRep if empty)
+                if (string.IsNullOrWhiteSpace(role))
+                {
+                    role = "SalesRep";
+                }
+
                 var query = new GetPublicTemplatesQuery
                 {
                     RequestorUserId = userId,
@@ -532,7 +713,9 @@ namespace CRM.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                var logger = HttpContext.RequestServices.GetService<Microsoft.Extensions.Logging.ILogger<QuotationTemplatesController>>();
+                logger?.LogError(ex, "Error in GetPublic templates endpoint: {Error}", ex.Message);
+                return StatusCode(500, new { error = ex.Message, details = ex.StackTrace });
             }
         }
     }

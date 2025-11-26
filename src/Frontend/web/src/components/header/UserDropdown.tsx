@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import React, { useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { getAccessToken, parseJwt } from "@/lib/session";
@@ -8,14 +8,19 @@ import { useAuth } from "@/store/auth";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
+  const [fullName, setFullName] = useState("User");
+  const [email, setEmail] = useState("");
   const auth = useAuth();
-  const { fullName, email } = useMemo(() => {
+
+  useEffect(() => {
+    // Only run on client side to avoid hydration mismatch
     const token = getAccessToken();
     const p = parseJwt(token);
     const first = p?.firstName ?? "";
     const last = p?.lastName ?? "";
     const name = `${first} ${last}`.trim() || p?.email || "User";
-    return { fullName: name, email: p?.email ?? "" };
+    setFullName(name);
+    setEmail(p?.email ?? "");
   }, [auth.accessToken]);
 
 function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {

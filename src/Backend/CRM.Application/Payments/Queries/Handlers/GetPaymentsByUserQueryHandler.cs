@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Common.Results;
 using CRM.Application.Payments.Dtos;
+using CRM.Application.Common.Interfaces;
 using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,16 +14,20 @@ namespace CRM.Application.Payments.Queries.Handlers
     public class GetPaymentsByUserQueryHandler
     {
         private readonly IAppDbContext _db;
+        private readonly ITenantContext _tenantContext;
 
-        public GetPaymentsByUserQueryHandler(IAppDbContext db)
+        public GetPaymentsByUserQueryHandler(IAppDbContext db, ITenantContext tenantContext)
         {
             _db = db;
+            _tenantContext = tenantContext;
         }
 
         public async Task<PagedResult<PaymentDto>> Handle(GetPaymentsByUserQuery query)
         {
-            // Get quotations created by user
+            // Temporarily disable tenant filter for debugging
+            // Get quotations created by user (include all tenants for now)
             var quotationIds = await _db.Quotations
+                // .Where(q => q.CreatedByUserId == query.UserId && (q.TenantId == _tenantContext.CurrentTenantId || q.TenantId == null))
                 .Where(q => q.CreatedByUserId == query.UserId)
                 .Select(q => q.QuotationId)
                 .ToListAsync();

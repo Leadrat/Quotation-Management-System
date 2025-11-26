@@ -204,7 +204,7 @@ export default function AuditLogsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {logs.length === 0 ? (
+                  {!logs || !Array.isArray(logs) || logs.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}

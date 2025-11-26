@@ -5,10 +5,10 @@ import Button from "../../ui/button/Button";
 import { Modal } from "../../ui/modal";
 import Label from "../../form/Label";
 import Input from "../../form/input/InputField";
-import { useModal } from "@/hooks/useModal";
-
 export default function FormInModal() {
-  const { isOpen, openModal, closeModal } = useModal();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const openModal = () => setIsOpen(true);
+  const closeModal = () => setIsOpen(false);
   const handleSave = () => {
     // Handle save logic here
     console.log("Saving changes...");

@@ -8,14 +8,27 @@ namespace CRM.Application.Quotations.Services
     {
         public QuotationTotalsResult Calculate(Quotation quotation, List<QuotationLineItem> lineItems, decimal discountPercentage)
         {
-            // Calculate subtotal from line items
+            // Calculate subtotal from line items (including product-level discounts)
+            // Product-level discounts are already applied in the Amount field
             var subtotal = lineItems.Sum(item => item.Amount);
 
-            // Calculate discount
-            var discountAmount = subtotal * (discountPercentage / 100m);
-            if (discountAmount > subtotal)
+            // Calculate quotation-level discount (applied after product-level discounts)
+            var quotationDiscountAmount = subtotal * (discountPercentage / 100m);
+            if (quotationDiscountAmount > subtotal)
             {
-                discountAmount = subtotal; // Discount cannot exceed subtotal
+                quotationDiscountAmount = subtotal; // Discount cannot exceed subtotal
+            }
+
+            // Calculate total product-level discounts
+            var productLevelDiscounts = lineItems
+                .Where(item => item.DiscountAmount.HasValue && item.DiscountAmount.Value > 0)
+                .Sum(item => item.DiscountAmount.Value);
+
+            // Total discount = product-level discounts + quotation-level discount
+            var totalDiscountAmount = productLevelDiscounts + quotationDiscountAmount;
+            if (totalDiscountAmount > subtotal)
+            {
+                totalDiscountAmount = subtotal;
             }
 
             // Tax calculation will be done separately by TaxCalculationService
@@ -24,8 +37,10 @@ namespace CRM.Application.Quotations.Services
             return new QuotationTotalsResult
             {
                 SubTotal = subtotal,
-                DiscountAmount = discountAmount,
-                DiscountPercentage = discountPercentage
+                DiscountAmount = totalDiscountAmount,
+                DiscountPercentage = discountPercentage,
+                ProductLevelDiscounts = productLevelDiscounts,
+                QuotationLevelDiscount = quotationDiscountAmount
             };
         }
     }
@@ -35,6 +50,8 @@ namespace CRM.Application.Quotations.Services
         public decimal SubTotal { get; set; }
         public decimal DiscountAmount { get; set; }
         public decimal DiscountPercentage { get; set; }
+        public decimal ProductLevelDiscounts { get; set; }
+        public decimal QuotationLevelDiscount { get; set; }
     }
 }
 

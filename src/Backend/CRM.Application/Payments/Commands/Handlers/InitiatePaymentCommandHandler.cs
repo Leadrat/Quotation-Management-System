@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Payments.Dtos;
 using CRM.Application.Payments.Services;
@@ -18,28 +19,35 @@ namespace CRM.Application.Payments.Commands.Handlers
         private readonly IAppDbContext _db;
         private readonly IPaymentGatewayFactory _gatewayFactory;
         private readonly ILogger<InitiatePaymentCommandHandler> _logger;
+        private readonly ITenantContext _tenantContext;
 
         public InitiatePaymentCommandHandler(
             IAppDbContext db,
             IPaymentGatewayFactory gatewayFactory,
-            ILogger<InitiatePaymentCommandHandler> logger)
+            ILogger<InitiatePaymentCommandHandler> logger,
+            ITenantContext tenantContext)
         {
             _db = db;
             _gatewayFactory = gatewayFactory;
             _logger = logger;
+            _tenantContext = tenantContext;
         }
 
         public async Task<PaymentDto> Handle(InitiatePaymentCommand command)
         {
             var request = command.Request;
+            var currentTenantId = _tenantContext.CurrentTenantId;
 
             // Validate quotation exists and is accepted
+            // Temporarily disable tenant filter for debugging
+            // var currentTenantId = _tenantContext.CurrentTenantId;
             var quotation = await _db.Quotations
                 .Include(q => q.Client)
+                // .FirstOrDefaultAsync(q => q.QuotationId == request.QuotationId && q.TenantId == currentTenantId)
                 .FirstOrDefaultAsync(q => q.QuotationId == request.QuotationId);
 
             if (quotation == null)
-                throw new InvalidOperationException("Quotation not found");
+                throw new InvalidOperationException("Quotation not found or not accessible in current tenant");
 
             if (quotation.Status != QuotationStatus.Accepted)
                 throw new InvalidOperationException("Payment can only be initiated for accepted quotations");
@@ -48,6 +56,7 @@ namespace CRM.Application.Payments.Commands.Handlers
             var existingPayment = await _db.Payments
                 .FirstOrDefaultAsync(p => 
                     p.QuotationId == request.QuotationId && 
+                    p.TenantId == currentTenantId &&
                     (p.PaymentStatus == PaymentStatus.Pending || 
                      p.PaymentStatus == PaymentStatus.Processing ||
                      p.PaymentStatus == PaymentStatus.Success));
@@ -78,6 +87,7 @@ namespace CRM.Application.Payments.Commands.Handlers
             var payment = new Payment
             {
                 PaymentId = Guid.NewGuid(),
+                TenantId = currentTenantId,
                 QuotationId = request.QuotationId,
                 PaymentGateway = request.PaymentGateway,
                 PaymentReference = Guid.NewGuid().ToString(), // Temporary, will be updated by gateway

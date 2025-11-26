@@ -1,17 +1,20 @@
+using CRM.Domain.Entities;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Common.Results;
 using CRM.Application.Notifications.Dtos;
 using CRM.Application.Notifications.Queries;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CRM.Application.Notifications.Queries.Handlers
 {
-    public class GetNotificationsQueryHandler
+    public class GetNotificationsQueryHandler : IRequestHandler<GetNotificationsQuery, PagedResult<NotificationDto>>
     {
         private readonly IAppDbContext _db;
         private readonly IMapper _mapper;
@@ -27,17 +30,17 @@ namespace CRM.Application.Notifications.Queries.Handlers
             _logger = logger;
         }
 
-        public async Task<PagedResult<NotificationDto>> Handle(GetNotificationsQuery query)
+        public async Task<PagedResult<NotificationDto>> Handle(GetNotificationsQuery query, CancellationToken cancellationToken)
         {
             try
             {
                 _logger.LogInformation("Getting notifications for user {UserId}", query.RequestorUserId);
 
                 // Base query - filter by recipient user
-                IQueryable<Domain.Entities.Notification> baseQuery = _db.Notifications
+                IQueryable<UserNotification> baseQuery = _db.Notifications
                     .AsNoTracking()
                     .Where(n => n.RecipientUserId == query.RequestorUserId)
-                    .Include(n => n.RecipientUser);
+                    .Include(n => n.User);
 
                 // Apply filters
                 if (query.Unread.HasValue)
@@ -76,14 +79,14 @@ namespace CRM.Application.Notifications.Queries.Handlers
                 }
 
                 // Get total count before pagination
-                var totalCount = await baseQuery.CountAsync();
+                var totalCount = await baseQuery.CountAsync(cancellationToken);
 
                 // Apply pagination and ordering
                 var notifications = await baseQuery
                     .OrderByDescending(n => n.CreatedAt)
                     .Skip((query.PageNumber - 1) * query.PageSize)
                     .Take(query.PageSize)
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
 
                 var dtos = _mapper.Map<NotificationDto[]>(notifications);
 

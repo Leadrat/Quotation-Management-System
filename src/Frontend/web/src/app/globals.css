@@ -1,68 +1,145 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* TailAdmin-like theme tokens so utility classes resolve (Tailwind v4) */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* dark surfaces */
+  --color-boxdark-2: #0b1220;   /* content background in dark */
+  --color-boxdark: #0f172a;     /* alternate dark surface */
+  --color-strokedark: #1f2937;  /* dark border */
+  /* dark text */
+  --color-bodydark: #94a3b8;    /* slate-400 for body text */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base color tokens similar to TailAdmin */
+:root {
+  --background: #ffffff;          /* light bg */
+  --foreground: #0f172a;          /* slate-900 */
+  --muted: #475569;               /* slate-600 */
+  --border: #e5e7eb;              /* gray-200 */
 }
 
-body {
-  background: var(--background);
+/* Activate dark palette when .dark is on html (ThemeContext toggles this) */
+.dark :root, .dark {
+  --background: #0b1220;          /* near TailAdmin dark */
+  --foreground: #e5e7eb;          /* gray-200 */
+  --muted: #a1a1aa;               /* zinc-400 */
+  --border: #1f2937;              /* gray-800 */
+}
+
+/* Base body colors (components still use Tailwind classes) */
+html, body {
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Global overrides: force any gray text/border utilities to black */
-/* Text grays → black */
-[class^="text-gray-"], [class*=" text-gray-"] {
-  color: #000 !important;
+/* Hint browsers to use dark native UI in dark mode (affects scrollbars) */
+.dark {
+  color-scheme: dark;
 }
-/* Text zinc/slate/neutral → black */
-[class^="text-zinc-"], [class*=" text-zinc-"],
-[class^="text-slate-"], [class*=" text-slate-"],
-[class^="text-neutral-"], [class*=" text-neutral-"] {
-  color: #000 !important;
-}
-/* Border grays → black */
-[class^="border-gray-"], [class*=" border-gray-"] {
-  border-color: #000 !important;
-}
-/* Border zinc/slate/neutral → black */
-[class^="border-zinc-"], [class*=" border-zinc-"],
-[class^="border-slate-"], [class*=" border-slate-"],
-[class^="border-neutral-"], [class*=" border-neutral-"] {
-  border-color: #000 !important;
-}
-/* Dark variant gray text/border → black as well */
-.dark [class^="text-gray-"], .dark [class*=" text-gray-"] {
-  color: #000 !important;
-}
-.dark [class^="border-gray-"], .dark [class*=" border-gray-"] {
-  border-color: #000 !important;
-}
-/* Links should be black by default */
-a { color: #000 !important; }
-h1, h2, h3, h4, h5, h6 { color: #000 !important; }
-/* Default common text elements to black */
-p, span, li, label, input, button, small, td, th, div { color: #000; }
 
-/* If background is black or very dark, force text to white for contrast */
-.bg-black, .bg-black * { color: #fff !important; }
-.bg-gray-900, .bg-neutral-900, .bg-zinc-900, .bg-slate-900,
-.bg-gray-950, .bg-neutral-950, .bg-zinc-950, .bg-slate-950,
-.bg-gray-800, .bg-neutral-800, .bg-zinc-800, .bg-slate-800 {
-  color: #fff !important;
+/* Provide sensible defaults for common elements without overriding utility classes */
+a { color: inherit; }
+hr { border-color: var(--border); }
+::placeholder { color: var(--muted); }
+
+/* Scrollbar styling */
+/* WebKit browsers */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: #f3f4f6; /* gray-100 */
+}
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background-color: #9ca3af; /* gray-400 */
+  border-radius: 9999px;
+  border: 2px solid #f3f4f6;
+}
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background: #f3f4f6;
+}
+html::-webkit-scrollbar-button,
+body::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button {
+  background: #e5e7eb; /* gray-200 */
+}
+html.dark::-webkit-scrollbar-track,
+html.dark body::-webkit-scrollbar-track,
+html.dark *::-webkit-scrollbar-track,
+.dark ::-webkit-scrollbar-track {
+  background: #0b1220; /* dark surface */
+}
+html.dark::-webkit-scrollbar-thumb,
+html.dark body::-webkit-scrollbar-thumb,
+html.dark *::-webkit-scrollbar-thumb,
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #374151; /* gray-700 */
+  border: 2px solid #0b1220;
+}
+html.dark::-webkit-scrollbar-corner,
+html.dark body::-webkit-scrollbar-corner,
+html.dark *::-webkit-scrollbar-corner,
+.dark ::-webkit-scrollbar-corner {
+  background: #0b1220;
+}
+html.dark::-webkit-scrollbar-button,
+html.dark body::-webkit-scrollbar-button,
+html.dark *::-webkit-scrollbar-button,
+.dark ::-webkit-scrollbar-button {
+  background: #1f2937; /* gray-800 */
+}
+
+/* Firefox */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+.dark html {
+  scrollbar-color: #374151 #0b1220;
+}
+
+/* Pragmatic dark-mode overrides for common light utilities used in UI */
+.dark .bg-white { background-color: #0f172a !important; }          /* slate-900 */
+.dark .bg-gray-50 { background-color: #0b1220 !important; }
+.dark .bg-gray-100 { background-color: #111827 !important; }       /* gray-900 */
+.dark .bg-slate-50 { background-color: #0b1220 !important; }
+/* Catch semi-transparent white utilities e.g. bg-white/5, bg-white/10, bg-white/[0.03] */
+.dark [class*="bg-white/"] { background-color: #0f172a !important; }
+.dark .bg-whiten, .dark .bg-whiter { background-color: #0f172a !important; }
+.dark .bg-gray-200 { background-color: #0f172a !important; }
+.dark .bg-gray-300 { background-color: #0f172a !important; }
+
+.dark .border-gray-100 { border-color: #1f2937 !important; }
+.dark .border-gray-200 { border-color: #1f2937 !important; }
+.dark .border-gray-300 { border-color: #374151 !important; }
+.dark .border-stroke { border-color: #1f2937 !important; }
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1f2937 !important; }
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #1f2937 !important; }
+
+.dark .text-gray-900, .dark .text-slate-900 { color: #e5e7eb !important; }
+.dark .text-gray-800, .dark .text-slate-800 { color: #e5e7eb !important; }
+.dark .text-gray-700, .dark .text-slate-700 { color: #d1d5db !important; }
+.dark .text-gray-600, .dark .text-slate-600 { color: #cbd5e1 !important; }
+.dark .text-gray-500, .dark .text-slate-500 { color: #9ca3af !important; }
+
+.dark .placeholder-gray-400::placeholder { color: #9ca3af !important; }
+
+/* Ensure native textarea controls have proper dark styling */
+.dark input, .dark select, .dark textarea {
+  background-color: #111827 !important; /* gray-900 */
+  color: #e5e7eb !important;            /* gray-200 */
+  border-color: #1f2937 !important;     /* gray-800 */
+}
+.dark input::placeholder, .dark textarea::placeholder {
+  color: #9ca3af !important;            /* gray-400 */
+}
+

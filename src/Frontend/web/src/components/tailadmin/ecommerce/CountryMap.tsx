@@ -1,12 +1,13 @@
 import React from "react";
+// Note: This component requires @react-jvectormap packages which are not installed
 // import { VectorMap } from "@react-jvectormap/core";
-import { worldMill } from "@react-jvectormap/world";
-import dynamic from "next/dynamic";
+// import { worldMill } from "@react-jvectormap/world";
+// import dynamic from "next/dynamic";
 
-const VectorMap = dynamic(
-  () => import("@react-jvectormap/core").then((mod) => mod.VectorMap),
-  { ssr: false }
-);
+// const VectorMap = dynamic(
+//   () => import("@react-jvectormap/core").then((mod) => mod.VectorMap),
+//   { ssr: false }
+// );
 
 // Define the component props
 interface CountryMapProps {
@@ -33,9 +34,16 @@ type Marker = {
 };
 
 const CountryMap: React.FC<CountryMapProps> = ({ mapColor }) => {
+  // Note: This component requires @react-jvectormap packages which are not installed
+  // Install @react-jvectormap/core and @react-jvectormap/world to use this component
   return (
-    <VectorMap
-      map={worldMill}
+    <div className="flex items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
+      <p className="text-gray-500 dark:text-gray-400">
+        Map component requires @react-jvectormap packages to be installed
+      </p>
+    </div>
+    /* <VectorMap
+      map={{} as any} // Placeholder - requires @react-jvectormap/world
       backgroundColor="transparent"
       markerStyle={
         {
@@ -116,7 +124,7 @@ const CountryMap: React.FC<CountryMapProps> = ({ mapColor }) => {
         selected: {},
         selectedHover: {},
       }}
-    />
+    /> */
   );
 };
 

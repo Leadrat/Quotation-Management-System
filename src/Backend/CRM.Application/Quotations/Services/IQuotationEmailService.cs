@@ -9,7 +9,6 @@ namespace CRM.Application.Quotations.Services
         Task SendQuotationEmailAsync(
             Quotation quotation,
             string recipientEmail,
-            byte[] pdfAttachment,
             string accessLink,
             List<string>? ccEmails = null,
             List<string>? bccEmails = null,

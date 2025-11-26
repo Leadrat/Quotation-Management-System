@@ -90,10 +90,10 @@ export default function ApplyTemplateModal({ clientId, onSelect, onClose }: Appl
               {filteredTemplates.map((template) => (
                 <div
                   key={template.templateId}
-                  className={`cursor-pointer rounded border p-4 transition ${
+                  className={`cursor-pointer rounded border-2 p-4 transition ${
                     selectedTemplate?.templateId === template.templateId
-                      ? "border-primary bg-primary/10"
-                      : "border-stroke hover:border-primary dark:border-strokedark"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-stroke hover:border-blue-500 dark:border-strokedark"
                   }`}
                   onClick={() => setSelectedTemplate(template)}
                 >
@@ -104,7 +104,18 @@ export default function ApplyTemplateModal({ clientId, onSelect, onClose }: Appl
                         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{template.description}</p>
                       )}
                       <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                        <span className="text-black dark:text-white">{template.lineItems.length} items</span>
+                        {template.isFileBased ? (
+                          <>
+                            <span className="rounded bg-blue-100 px-2 py-1 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                              {template.templateType || "File Template"}
+                            </span>
+                            {template.fileName && (
+                              <span className="text-black dark:text-white">📄 {template.fileName}</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-black dark:text-white">{template.lineItems.length} items</span>
+                        )}
                         <span className="text-black dark:text-white">Used {template.usageCount} times</span>
                         {template.isApproved && (
                           <span className="rounded bg-green-100 px-2 py-1 text-green-800 dark:bg-green-900 dark:text-green-300">
@@ -143,9 +154,9 @@ export default function ApplyTemplateModal({ clientId, onSelect, onClose }: Appl
           <button
             onClick={handleApply}
             disabled={!selectedTemplate}
-            className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90 disabled:opacity-50"
+            className="rounded border-2 border-blue-500 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-boxdark dark:border-blue-500 dark:text-white dark:hover:bg-blue-900/20"
           >
-            Apply Template
+            Apply Selected Template
           </button>
         </div>
       </div>

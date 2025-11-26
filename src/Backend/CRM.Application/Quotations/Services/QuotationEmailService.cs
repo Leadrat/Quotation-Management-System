@@ -12,7 +12,10 @@ using FluentEmail.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Http;
 using CRM.Domain.Entities;
+using CRM.Application.CompanyDetails.Dtos;
+using CRM.Application.CompanyDetails.Services;
 using CRM.Shared.Config;
 
 namespace CRM.Application.Quotations.Services
@@ -28,13 +31,15 @@ namespace CRM.Application.Quotations.Services
         private readonly string _fromEmail;
         private readonly string _fromName;
         private readonly string? _resendApiKey;
+        private readonly ICompanyDetailsService _companyDetailsService;
 
         public QuotationEmailService(
             IFluentEmail? fluentEmail,
             IHttpClientFactory? httpClientFactory,
             ILogger<QuotationEmailService> logger,
             IOptions<QuotationManagementSettings> settings,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ICompanyDetailsService companyDetailsService)
         {
             _fluentEmail = fluentEmail;
             _httpClientFactory = httpClientFactory;
@@ -45,12 +50,12 @@ namespace CRM.Application.Quotations.Services
             _fromEmail = _configuration.GetValue<string>("Email:From") ?? "no-reply@crm.com";
             _fromName = _configuration.GetValue<string>("Email:FromName") ?? "CRM System";
             _resendApiKey = _configuration.GetValue<string>("Email:Resend:ApiKey");
+            _companyDetailsService = companyDetailsService;
         }
 
         public async Task SendQuotationEmailAsync(
             Quotation quotation,
             string recipientEmail,
-            byte[] pdfAttachment,
             string accessLink,
             List<string>? ccEmails = null,
             List<string>? bccEmails = null,
@@ -66,16 +71,30 @@ namespace CRM.Application.Quotations.Services
                 throw new ArgumentException("Recipient email cannot be null or empty.", nameof(recipientEmail));
             }
             
-            if (pdfAttachment == null || pdfAttachment.Length == 0)
-            {
-                throw new ArgumentException("PDF attachment cannot be null or empty.", nameof(pdfAttachment));
-            }
-            
             try
             {
+                // Get company details (from snapshot or service)
+                CompanyDetailsDto? companyDetails = null;
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(quotation.CompanyDetailsSnapshot))
+                    {
+                        companyDetails = JsonSerializer.Deserialize<CompanyDetailsDto>(quotation.CompanyDetailsSnapshot);
+                    }
+                    else
+                    {
+                        companyDetails = await _companyDetailsService.GetCompanyDetailsAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load company details for quotation {QuotationId}", quotation.QuotationId);
+                }
+
                 var viewUrl = ResolveAccessLink(quotation, accessLink);
-                var emailBody = GenerateEmailBody(quotation, viewUrl, customMessage);
-                var subject = $"Quotation {quotation.QuotationNumber ?? "N/A"} from Your Company";
+                var emailBody = GenerateEmailBody(quotation, viewUrl, customMessage, companyDetails);
+                var companyName = companyDetails?.CompanyName ?? "Your Company";
+                var subject = $"Quotation {quotation.QuotationNumber ?? "N/A"} from {companyName}";
 
                 // Use Resend API if configured
                 if (_emailProvider.Equals("Resend", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(_resendApiKey) && _httpClientFactory != null)
@@ -101,16 +120,6 @@ namespace CRM.Application.Quotations.Services
                     {
                         requestBody["bcc"] = bccEmails.ToArray();
                     }
-
-                    // Add PDF attachment
-                    requestBody["attachments"] = new[]
-                    {
-                        new Dictionary<string, object>
-                        {
-                            { "filename", $"Quotation-{quotation.QuotationNumber ?? "N/A"}.pdf" },
-                            { "content", Convert.ToBase64String(pdfAttachment) }
-                        }
-                    };
 
                     try
                     {
@@ -163,13 +172,6 @@ namespace CRM.Application.Quotations.Services
                             email.BCC(bcc);
                         }
                     }
-
-                    email.Attach(new Attachment
-                    {
-                        Filename = $"Quotation-{quotation.QuotationNumber ?? "N/A"}.pdf",
-                        Data = new MemoryStream(pdfAttachment),
-                        ContentType = "application/pdf"
-                    });
 
                     var response = await email.SendAsync();
 
@@ -258,7 +260,148 @@ namespace CRM.Application.Quotations.Services
             }
         }
 
-        private string GenerateEmailBody(Quotation quotation, string accessLink, string? customMessage)
+        private string GenerateCompanyFooter(CompanyDetailsDto? companyDetails)
+        {
+            if (companyDetails == null)
+            {
+                return "<p>Your Company Name</p>";
+            }
+
+            var footer = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(companyDetails.CompanyName))
+            {
+                footer.AppendLine($"<p><strong>{companyDetails.CompanyName}</strong></p>");
+            }
+
+            // Address
+            if (!string.IsNullOrWhiteSpace(companyDetails.CompanyAddress))
+            {
+                footer.AppendLine($"<p>{companyDetails.CompanyAddress}</p>");
+            }
+            var addressParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(companyDetails.City)) addressParts.Add(companyDetails.City);
+            if (!string.IsNullOrWhiteSpace(companyDetails.State)) addressParts.Add(companyDetails.State);
+            if (!string.IsNullOrWhiteSpace(companyDetails.PostalCode)) addressParts.Add(companyDetails.PostalCode);
+            if (!string.IsNullOrWhiteSpace(companyDetails.Country)) addressParts.Add(companyDetails.Country);
+            if (addressParts.Any())
+            {
+                footer.AppendLine($"<p>{string.Join(", ", addressParts)}</p>");
+            }
+
+            // Contact Info
+            if (!string.IsNullOrWhiteSpace(companyDetails.ContactEmail))
+            {
+                footer.AppendLine($"<p>Email: {companyDetails.ContactEmail}</p>");
+            }
+            if (!string.IsNullOrWhiteSpace(companyDetails.ContactPhone))
+            {
+                footer.AppendLine($"<p>Phone: {companyDetails.ContactPhone}</p>");
+            }
+            if (!string.IsNullOrWhiteSpace(companyDetails.Website))
+            {
+                footer.AppendLine($"<p>Website: {companyDetails.Website}</p>");
+            }
+
+            // Dynamic Country-Specific Identifiers
+            if (companyDetails.IdentifierFields != null && companyDetails.IdentifierFields.Any(f => !string.IsNullOrWhiteSpace(f.Value)))
+            {
+                footer.AppendLine("<p><strong>Company Identifiers:</strong></p>");
+                footer.AppendLine("<ul>");
+                foreach (var identifier in companyDetails.IdentifierFields.Where(f => !string.IsNullOrWhiteSpace(f.Value)).OrderBy(f => f.DisplayOrder))
+                {
+                    footer.AppendLine($"<li><strong>{identifier.DisplayName}:</strong> {identifier.Value}</li>");
+                }
+                footer.AppendLine("</ul>");
+            }
+            else
+            {
+                // Fallback to legacy tax information
+                var taxInfo = new List<string>();
+                if (!string.IsNullOrWhiteSpace(companyDetails.PanNumber)) taxInfo.Add($"PAN: {companyDetails.PanNumber}");
+                if (!string.IsNullOrWhiteSpace(companyDetails.TanNumber)) taxInfo.Add($"TAN: {companyDetails.TanNumber}");
+                if (!string.IsNullOrWhiteSpace(companyDetails.GstNumber)) taxInfo.Add($"GST: {companyDetails.GstNumber}");
+                if (taxInfo.Any())
+                {
+                    footer.AppendLine($"<p>{string.Join(" | ", taxInfo)}</p>");
+                }
+            }
+
+            // Dynamic Country-Specific Bank Details
+            if (companyDetails.BankFields != null && companyDetails.BankFields.Any(f => !string.IsNullOrWhiteSpace(f.Value)))
+            {
+                footer.AppendLine("<p><strong>Bank Details:</strong></p>");
+                footer.AppendLine("<ul>");
+                foreach (var bankField in companyDetails.BankFields.Where(f => !string.IsNullOrWhiteSpace(f.Value)).OrderBy(f => f.DisplayOrder))
+                {
+                    footer.AppendLine($"<li><strong>{bankField.DisplayName}:</strong> {bankField.Value}</li>");
+                }
+                footer.AppendLine("</ul>");
+                
+                // Also show legacy bank details if available
+                if (companyDetails.BankDetails != null && companyDetails.BankDetails.Any())
+                {
+                    var bankDetails = companyDetails.BankDetails.FirstOrDefault();
+                    if (bankDetails != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(bankDetails.BankName))
+                        {
+                            footer.AppendLine($"<p><strong>Bank:</strong> {bankDetails.BankName}");
+                            if (!string.IsNullOrWhiteSpace(bankDetails.BranchName))
+                            {
+                                footer.AppendLine($", {bankDetails.BranchName}");
+                            }
+                            footer.AppendLine("</p>");
+                        }
+                        if (!string.IsNullOrWhiteSpace(bankDetails.AccountNumber))
+                        {
+                            footer.AppendLine($"<p><strong>Account Number:</strong> {bankDetails.AccountNumber}</p>");
+                        }
+                    }
+                }
+            }
+            else if (companyDetails.BankDetails != null && companyDetails.BankDetails.Any())
+            {
+                // Fallback to legacy bank details
+                var bankDetails = companyDetails.BankDetails.FirstOrDefault(b => b.Country == "India") 
+                    ?? companyDetails.BankDetails.FirstOrDefault();
+                if (bankDetails != null)
+                {
+                    footer.AppendLine("<p><strong>Bank Details:</strong></p>");
+                    footer.AppendLine($"<p>{bankDetails.BankName}");
+                    if (!string.IsNullOrWhiteSpace(bankDetails.BranchName))
+                    {
+                        footer.AppendLine($", {bankDetails.BranchName}");
+                    }
+                    footer.AppendLine("</p>");
+                    footer.AppendLine($"<p>Account Number: {bankDetails.AccountNumber}</p>");
+                    if (bankDetails.Country == "India" && !string.IsNullOrWhiteSpace(bankDetails.IfscCode))
+                    {
+                        footer.AppendLine($"<p>IFSC Code: {bankDetails.IfscCode}</p>");
+                    }
+                    if (bankDetails.Country == "Dubai")
+                    {
+                        if (!string.IsNullOrWhiteSpace(bankDetails.Iban))
+                        {
+                            footer.AppendLine($"<p>IBAN: {bankDetails.Iban}</p>");
+                        }
+                        if (!string.IsNullOrWhiteSpace(bankDetails.SwiftCode))
+                        {
+                            footer.AppendLine($"<p>SWIFT Code: {bankDetails.SwiftCode}</p>");
+                        }
+                    }
+                }
+            }
+
+            // Legal Disclaimer
+            if (!string.IsNullOrWhiteSpace(companyDetails.LegalDisclaimer))
+            {
+                footer.AppendLine($"<p style=\"font-size: 10px; color: #666; margin-top: 20px;\">{companyDetails.LegalDisclaimer}</p>");
+            }
+
+            return footer.ToString();
+        }
+
+        private string GenerateEmailBody(Quotation quotation, string accessLink, string? customMessage, CompanyDetailsDto? companyDetails)
         {
             return $@"
 <!DOCTYPE html>
@@ -281,7 +424,7 @@ namespace CRM.Application.Quotations.Services
         </div>
         <div class=""content"">
             <p>Dear {quotation.Client?.CompanyName ?? "Client"},</p>
-            <p>Your quotation is attached and ready for review.</p>
+            <p>Your quotation is ready for review. Please click the link below to view the complete quotation online.</p>
             {(string.IsNullOrWhiteSpace(customMessage) ? "" : $"<p>{customMessage}</p>")}
             <div class=""summary"">
                 <p><strong>Quotation Date:</strong> {quotation.QuotationDate:dd MMM yyyy}</p>
@@ -290,10 +433,11 @@ namespace CRM.Application.Quotations.Services
             </div>
             <a href=""{accessLink}"" class=""button"">View Quotation Online</a>
             <p>Please review and respond within {quotation.ValidUntil:dd MMM yyyy}.</p>
+            <p><em>Note: This quotation is available online through the secure link above. No PDF attachment is included for security reasons.</em></p>
         </div>
         <div class=""footer"">
             <p>Thank you for your business!</p>
-            <p>Your Company Name</p>
+            {GenerateCompanyFooter(companyDetails)}
         </div>
     </div>
 </body>

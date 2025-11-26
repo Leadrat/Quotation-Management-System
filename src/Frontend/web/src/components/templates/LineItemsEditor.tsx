@@ -29,9 +29,9 @@ export default function LineItemsEditor({
           <button
             type="button"
             onClick={onAdd}
-            className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
+            className="rounded border border-blue-500 bg-transparent px-4 py-2 text-sm text-black hover:bg-blue-50"
           >
-            Add Item
+            Add Line Item
           </button>
         )}
       </div>

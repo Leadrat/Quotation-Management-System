@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using CRM.Application.Users.Commands;
 using CRM.Application.Users.Commands.Handlers;
@@ -11,6 +12,7 @@ using CRM.Application.Auth.Commands;
 using CRM.Application.Auth.Commands.Handlers;
 using CRM.Application.Auth.Services;
 using CRM.Shared.Config;
+using CRM.Shared.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using CRM.Application.Auth.Commands.Requests;
@@ -41,6 +43,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [AllowAnonymous]
     [EnableRateLimiting("register-ip")]
     [ProducesResponseType(typeof(RegisterResult), 201)]
     public async Task<IActionResult> Register([FromBody] RegisterClientCommand cmd)
@@ -53,25 +56,45 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(CRM.Application.Auth.Commands.Results.LoginResult), 200)]
     public async Task<IActionResult> Login([FromBody] LoginCommand cmd)
     {
-        await _audit.LogAsync("auth_login_attempt", new { cmd.Email });
-        var handler = new LoginCommandHandler(_db, _jwt);
-        var result = await handler.Handle(cmd);
-        // set refresh cookie (preferred for browsers)
-        Response.Cookies.Append("refreshToken", result.RefreshToken, new CookieOptions
+        try
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Expires = DateTimeOffset.UtcNow.AddDays(30)
-        });
-        await _audit.LogAsync("auth_login_success", new { Email = cmd.Email });
-        return Ok(result);
+            await _audit.LogAsync("auth_login_attempt", new { cmd.Email });
+            var handler = new LoginCommandHandler(_db, _jwt);
+            var result = await handler.Handle(cmd);
+            // set refresh cookie (preferred for browsers)
+            Response.Cookies.Append("refreshToken", result.RefreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Expires = DateTimeOffset.UtcNow.AddDays(30)
+            });
+            await _audit.LogAsync("auth_login_success", new { Email = cmd.Email });
+            return Ok(result);
+        }
+        catch (InvalidCredentialsException)
+        {
+            // Re-throw to be handled by global exception handler
+            throw;
+        }
+        catch (UserNotActiveException)
+        {
+            // Re-throw to be handled by global exception handler
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _audit.LogAsync("auth_login_error", new { cmd.Email, Error = ex.Message });
+            throw;
+        }
     }
 
     [HttpPost("refresh-token")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(CRM.Application.Auth.Commands.Results.RefreshTokenResult), 200)]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenCommand cmd)
     {
@@ -87,6 +110,27 @@ public class AuthController : ControllerBase
             Expires = DateTimeOffset.UtcNow.AddDays(30)
         });
         return Ok(result);
+    }
+
+    [HttpGet("me")]
+    [Authorize]
+    public IActionResult GetCurrentUser()
+    {
+        var user = HttpContext.User;
+        var claims = user.Claims.Select(c => new { c.Type, c.Value }).ToList();
+        var roles = user.Claims.Where(c => c.Type == ClaimTypes.Role || c.Type == "role").Select(c => c.Value).ToList();
+        var isAdmin = user.IsInRole("Admin");
+        
+        return Ok(new
+        {
+            success = true,
+            userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub"),
+            email = user.FindFirstValue(ClaimTypes.Email) ?? user.FindFirstValue("email"),
+            roles = roles,
+            isAdmin = isAdmin,
+            isAuthenticated = user.Identity?.IsAuthenticated ?? false,
+            allClaims = claims
+        });
     }
 
     [HttpPost("logout")]

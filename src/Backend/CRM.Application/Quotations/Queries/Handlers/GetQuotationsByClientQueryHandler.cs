@@ -33,7 +33,10 @@ namespace CRM.Application.Quotations.Queries.Handlers
             }
 
             var isAdmin = string.Equals(query.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin && client.CreatedByUserId != query.RequestorUserId)
+            var isManager = string.Equals(query.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
+            var canAccess = isAdmin || isManager || client.CreatedByUserId == query.RequestorUserId;
+            
+            if (!canAccess)
             {
                 throw new UnauthorizedAccessException("You do not have permission to view quotations for this client.");
             }

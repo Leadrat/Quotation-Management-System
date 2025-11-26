@@ -33,10 +33,17 @@ export default function SuspiciousActivityPage() {
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
       });
-      setFlags(res.data || []);
-      setTotal(res.totalCount);
+      setFlags(Array.isArray(res.data) ? res.data : []);
+      setTotal(res.totalCount || 0);
     } catch (e: any) {
-      setError(e.message || "Failed to load suspicious activity");
+      const errorMsg = e.message || "Failed to load suspicious activity";
+      setError(errorMsg);
+      setFlags([]);
+      setTotal(0);
+      // Don't show error for 404 - endpoint may not be implemented yet
+      if (e.message?.includes("404")) {
+        setError("Suspicious activity monitoring is not available yet.");
+      }
     } finally {
       setLoading(false);
     }
@@ -66,7 +73,11 @@ export default function SuspiciousActivityPage() {
         <p className="text-gray-600 text-sm mt-1">Monitor and review flagged activities for potential security issues</p>
       </div>
 
-      {error && <div className="text-red-600 mb-3 text-sm bg-red-50 p-3 rounded">{error}</div>}
+      {error && (
+        <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-700 dark:text-yellow-400">
+          {error}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded border p-4 mb-4">

@@ -9,6 +9,8 @@ using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using CRM.Shared.Config;
 
 namespace CRM.Application.QuotationTemplates.Commands.Handlers
 {
@@ -16,13 +18,16 @@ namespace CRM.Application.QuotationTemplates.Commands.Handlers
     {
         private readonly IAppDbContext _db;
         private readonly ILogger<ApplyTemplateToQuotationCommandHandler> _logger;
+        private readonly QuotationSettings _settings;
 
         public ApplyTemplateToQuotationCommandHandler(
             IAppDbContext db,
-            ILogger<ApplyTemplateToQuotationCommandHandler> logger)
+            ILogger<ApplyTemplateToQuotationCommandHandler> logger,
+            IOptions<QuotationSettings> settings)
         {
             _db = db;
             _logger = logger;
+            _settings = settings.Value;
         }
 
         public async Task<CreateQuotationRequest> Handle(ApplyTemplateToQuotationCommand command)
@@ -32,7 +37,7 @@ namespace CRM.Application.QuotationTemplates.Commands.Handlers
 
             // Find template (get latest version)
             var template = await _db.QuotationTemplates
-                .Include(t => t.LineItems.OrderBy(li => li.SequenceNumber))
+                .Include(t => t.LineItems)
                 .FirstOrDefaultAsync(t => t.TemplateId == command.TemplateId);
 
             if (template == null)
@@ -44,6 +49,14 @@ namespace CRM.Application.QuotationTemplates.Commands.Handlers
             if (template.IsDeleted())
             {
                 throw new TemplateNotEditableException(command.TemplateId);
+            }
+
+            // Ensure deterministic line item ordering
+            if (template.LineItems != null)
+            {
+                template.LineItems = template.LineItems
+                    .OrderBy(li => li.SequenceNumber)
+                    .ToList();
             }
 
             // Check visibility rules
@@ -72,16 +85,19 @@ namespace CRM.Application.QuotationTemplates.Commands.Handlers
             {
                 ClientId = command.ClientId,
                 QuotationDate = DateTime.Today,
-                ValidUntil = DateTime.Today.AddDays(30), // Default 30 days
+                ValidUntil = DateTime.Today.AddDays(_settings.DefaultValidDays),
                 DiscountPercentage = template.DiscountDefault ?? 0,
                 Notes = template.Notes,
-                LineItems = template.LineItems.Select(li => new CreateLineItemRequest
-                {
-                    ItemName = li.ItemName,
-                    Description = li.Description,
-                    Quantity = li.Quantity,
-                    UnitRate = li.UnitRate
-                }).ToList()
+                TemplateId = template.TemplateId, // Store template reference
+                LineItems = template.IsFileBased 
+                    ? new List<CreateLineItemRequest>() // File-based templates don't have line items - they use the uploaded file
+                    : template.LineItems.Select(li => new CreateLineItemRequest
+                    {
+                        ItemName = li.ItemName,
+                        Description = li.Description,
+                        Quantity = li.Quantity,
+                        UnitRate = li.UnitRate
+                    }).ToList()
             };
 
             _logger.LogInformation("Template {TemplateId} applied successfully. Usage count: {UsageCount}", 

@@ -110,7 +110,7 @@ namespace CRM.Application.QuotationTemplates.Commands.Handlers
                         if (existingItem != null)
                         {
                             lineItem = _mapper.Map<QuotationTemplateLineItem>(lineItemRequest);
-                            lineItem.LineItemId = existingItem.LineItemId; // Keep same ID
+                            lineItem.LineItemId = Guid.NewGuid(); // New ID for new version to avoid PK conflicts
                             lineItem.TemplateId = updatedTemplate.TemplateId;
                             lineItem.SequenceNumber = i + 1;
                             lineItem.CalculateAmount();

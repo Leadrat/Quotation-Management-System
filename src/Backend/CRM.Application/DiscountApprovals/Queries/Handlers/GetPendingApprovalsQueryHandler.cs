@@ -30,33 +30,53 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
 
         public async Task<PagedResult<DiscountApprovalDto>> Handle(GetPendingApprovalsQuery query)
         {
-            _logger.LogInformation("Getting pending approvals for user {UserId} with role {Role}", 
-                query.RequestorUserId, query.RequestorRole);
+            try
+            {
+                _logger.LogInformation("Getting pending approvals for user {UserId} with role {Role}", 
+                    query.RequestorUserId, query.RequestorRole);
 
-            // Base query - include navigation properties
-            IQueryable<Domain.Entities.DiscountApproval> baseQuery = _db.DiscountApprovals
-                .AsNoTracking()
-                .Include(a => a.Quotation)
-                    .ThenInclude(q => q.Client)
-                .Include(a => a.RequestedByUser)
-                .Include(a => a.ApproverUser);
+                // Validate requestor user ID
+                if (query.RequestorUserId == Guid.Empty)
+                {
+                    _logger.LogWarning("Invalid RequestorUserId (empty GUID)");
+                    return new PagedResult<DiscountApprovalDto>
+                    {
+                        Success = true,
+                        Data = Array.Empty<DiscountApprovalDto>(),
+                        PageNumber = query.PageNumber,
+                        PageSize = query.PageSize,
+                        TotalCount = 0
+                    };
+                }
+
+                // Base query - include navigation properties
+                IQueryable<Domain.Entities.DiscountApproval> baseQuery = _db.DiscountApprovals
+                    .AsNoTracking()
+                    .Include(a => a.Quotation)
+                        .ThenInclude(q => q.Client)
+                    .Include(a => a.RequestedByUser)
+                    .Include(a => a.ApproverUser);
 
             // Filter by approver based on role
             if (query.RequestorRole.Equals("Manager", StringComparison.OrdinalIgnoreCase))
             {
-                // Manager sees only manager-level approvals assigned to them
+                // Manager sees ALL manager-level approvals (not escalated to admin)
+                // This allows any manager to approve any Manager-level request
+                _logger.LogInformation("Filtering approvals for Manager: ApprovalLevel=Manager, EscalatedToAdmin=false");
                 baseQuery = baseQuery.Where(a => 
                     a.ApprovalLevel == ApprovalLevel.Manager && 
-                    (a.ApproverUserId == query.RequestorUserId || a.ApproverUserId == null));
+                    !a.EscalatedToAdmin);
             }
             else if (query.RequestorRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
             {
                 // Admin sees all approvals
+                _logger.LogInformation("Filtering approvals for Admin: showing all approvals");
                 // No additional filter
             }
             else
             {
                 // SalesRep sees only their own requests
+                _logger.LogInformation("Filtering approvals for SalesRep: RequestedByUserId={UserId}", query.RequestorUserId);
                 baseQuery = baseQuery.Where(a => a.RequestedByUserId == query.RequestorUserId);
             }
 
@@ -101,6 +121,8 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
 
             // Get total count
             var totalCount = await baseQuery.CountAsync();
+            _logger.LogInformation("Found {Count} approvals matching filters for user {UserId} with role {Role}", 
+                totalCount, query.RequestorUserId, query.RequestorRole);
 
             // Apply pagination
             var approvals = await baseQuery
@@ -109,16 +131,27 @@ namespace CRM.Application.DiscountApprovals.Queries.Handlers
                 .Take(query.PageSize)
                 .ToListAsync();
 
-            var dtos = approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToArray();
+            _logger.LogInformation("Retrieved {Count} approvals after pagination", approvals.Count);
 
-            return new PagedResult<DiscountApprovalDto>
+                var dtos = approvals.Select(a => _mapper.Map<DiscountApprovalDto>(a)).ToArray();
+
+                _logger.LogInformation("Mapped {Count} approvals to DTOs", dtos.Length);
+
+                return new PagedResult<DiscountApprovalDto>
+                {
+                    Success = true,
+                    Data = dtos,
+                    PageNumber = query.PageNumber,
+                    PageSize = query.PageSize,
+                    TotalCount = totalCount
+                };
+            }
+            catch (Exception ex)
             {
-                Success = true,
-                Data = dtos,
-                PageNumber = query.PageNumber,
-                PageSize = query.PageSize,
-                TotalCount = totalCount
-            };
+                _logger.LogError(ex, "Error getting pending approvals for user {UserId} with role {Role}", 
+                    query.RequestorUserId, query.RequestorRole);
+                throw;
+            }
         }
     }
 }

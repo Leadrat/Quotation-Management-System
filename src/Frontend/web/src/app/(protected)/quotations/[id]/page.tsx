@@ -2,11 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { QuotationsApi } from "@/lib/api";
+import { QuotationsApi, PaymentsApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { formatCurrency, formatDate, formatDateTime, getStatusColor, getStatusLabel } from "@/utils/quotationFormatter";
 import { ClientResponseCard, QuotationStatusTimeline, SendQuotationModal } from "@/components/quotations";
 import { ApprovalTimeline, ApprovalStatusBadge, ApprovalSubmissionModal } from "@/components/approvals";
 import { DiscountApprovalsApi, AdjustmentsApi } from "@/lib/api";
+import ManualPaymentModal from "@/components/payments/ManualPaymentModal";
 import { ApprovalTimeline as ApprovalTimelineType, DiscountApproval } from "@/types/discount-approvals";
 import { AdjustmentDto } from "@/types/refunds";
 import { AdjustmentRequestForm, AdjustmentTimeline, AdjustmentPreview } from "@/components/adjustments";
@@ -31,6 +33,17 @@ export default function ViewQuotationPage() {
   const [adjustments, setAdjustments] = useState<AdjustmentDto[]>([]);
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [selectedAdjustment, setSelectedAdjustment] = useState<AdjustmentDto | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [templatePreview, setTemplatePreview] = useState<{ hasTemplate: boolean; templateName?: string; content?: string } | null>(null);
+  const [manualPaymentOpen, setManualPaymentOpen] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState<import("@/types/payments").PaymentDto[]>([]);
+  const [templateLoading, setTemplateLoading] = useState(false);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+  }, []);
 
   useEffect(() => {
     if (quotationId) {
@@ -45,6 +58,11 @@ export default function ViewQuotationPage() {
       const result = await QuotationsApi.get(quotationId);
       setQuotation(result.data);
       await loadSupplemental();
+      
+      // Load template preview if template exists
+      if (result.data.templateId) {
+        await loadTemplatePreview();
+      }
     } catch (err: any) {
       setError(err.message || "Failed to load quotation");
     } finally {
@@ -52,20 +70,43 @@ export default function ViewQuotationPage() {
     }
   };
 
+  const loadTemplatePreview = async () => {
+    try {
+      setTemplateLoading(true);
+      const result = await QuotationsApi.getTemplatePreview(quotationId);
+      if (result.data.hasTemplate) {
+        setTemplatePreview({
+          hasTemplate: true,
+          templateName: result.data.templateName,
+          content: result.data.content
+        });
+      } else {
+        setTemplatePreview({ hasTemplate: false });
+      }
+    } catch (err: any) {
+      console.error("Failed to load template preview:", err);
+      setTemplatePreview({ hasTemplate: false });
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
   const loadSupplemental = async () => {
     try {
       setHistoryLoading(true);
-      const [historyRes, responseRes, accessLinkRes, approvalsRes, adjustmentsRes] = await Promise.all([
+      const [historyRes, responseRes, accessLinkRes, approvalsRes, adjustmentsRes, paymentsRes] = await Promise.all([
         QuotationsApi.statusHistory(quotationId),
         QuotationsApi.response(quotationId).catch(() => undefined),
         QuotationsApi.accessLink(quotationId).catch(() => undefined),
         DiscountApprovalsApi.getQuotationApprovals(quotationId).catch(() => undefined),
         AdjustmentsApi.getByQuotation(quotationId).catch(() => undefined),
+        PaymentsApi.getQuotationHistory(quotationId).catch(() => undefined),
       ]);
       setStatusHistory(historyRes?.data || []);
       setResponseData(responseRes && "data" in (responseRes || {}) ? responseRes.data : null);
       setAccessLink(accessLinkRes && "data" in (accessLinkRes || {}) ? accessLinkRes.data : null);
       setAdjustments(adjustmentsRes?.data || []);
+      setPaymentHistory(paymentsRes?.data || []);
       
       // Load approval timeline
       if (approvalsRes?.data) {
@@ -128,13 +169,24 @@ export default function ViewQuotationPage() {
     QuotationsApi.downloadPdf(quotationId);
   };
 
+  const handleDownloadDocx = () => {
+    QuotationsApi.downloadDocx(quotationId);
+  };
+
   const recipientFallback = quotation?.clientEmail;
-  const canSend = quotation?.status === "DRAFT";
-  const canResend = ["SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED"].includes(quotation?.status);
+  const isAdmin = role === "Admin";
+  const isManager = role === "Manager";
+  const isSalesRep = role === "SalesRep";
+  const canAddPayment = isAdmin || isManager || isSalesRep;
+  // Only SalesRep can send/resend quotations - Admin and Manager cannot
+  const canSend = quotation?.status === "DRAFT" && isSalesRep;
+  const canResend = ["SENT", "VIEWED", "ACCEPTED", "REJECTED", "EXPIRED"].includes(quotation?.status) && isSalesRep;
+  const canEdit = quotation?.status === "DRAFT" && isSalesRep;
+  const canDelete = quotation?.status === "DRAFT" && isSalesRep;
 
   if (loading) {
     return (
-      <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+      <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
         <div className="py-8 text-center">Loading...</div>
       </div>
     );
@@ -142,7 +194,7 @@ export default function ViewQuotationPage() {
 
   if (error || !quotation) {
     return (
-      <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+      <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
         <div className="py-8 text-center text-red-500">{error || "Quotation not found"}</div>
         <div className="text-center">
           <Link href="/quotations" className="text-primary hover:underline">
@@ -154,7 +206,7 @@ export default function ViewQuotationPage() {
   }
 
   return (
-    <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+    <div className="rounded-sm border border-gray-200 bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-gray-800 dark:bg-gray-900 sm:px-7.5 xl:pb-1">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h4 className="text-title-md2 font-bold text-black dark:text-white">Quotation {quotation.quotationNumber}</h4>
@@ -165,21 +217,25 @@ export default function ViewQuotationPage() {
         <div className="flex gap-2">
           {canSend && (
             <>
-              <Link
-                href={`/quotations/${quotationId}/edit`}
-                className="rounded bg-yellow-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
-              >
-                Edit
-              </Link>
-              <button
-                onClick={handleDelete}
-                className="rounded bg-red-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
-              >
-                Delete
-              </button>
+              {canEdit && (
+                <Link
+                  href={`/quotations/${quotationId}/edit`}
+                  className="rounded bg-yellow-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
+                >
+                  Edit
+                </Link>
+              )}
+              {canDelete && (
+                <button
+                  onClick={handleDelete}
+                  className="rounded bg-red-500 px-4 py-2 text-sm text-white hover:bg-opacity-90"
+                >
+                  Delete
+                </button>
+              )}
               <button
                 onClick={() => setSendModalOpen(true)}
-                className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
+                className="rounded border border-blue-500 bg-primary px-4 py-2 text-sm text-black dark:text-white hover:bg-opacity-90"
               >
                 Send
               </button>
@@ -189,18 +245,36 @@ export default function ViewQuotationPage() {
             <>
               <button
                 onClick={() => setResendModalOpen(true)}
-                className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-opacity-90"
+                className="rounded bg-primary px-4 py-2 text-sm text-black hover:bg-opacity-90"
               >
                 Resend
               </button>
-              <button
-                onClick={handleDownloadPdf}
-                className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50 dark:border-strokedark dark:text-white dark:hover:bg-meta-4"
-              >
-                Download PDF
-              </button>
             </>
           )}
+
+          {/* Download Actions - always available to viewers */}
+          <button
+            onClick={handleDownloadPdf}
+            className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50 dark:border-strokedark dark:text-white dark:hover:bg-meta-4"
+          >
+            Download PDF
+          </button>
+          <button
+            onClick={handleDownloadDocx}
+            className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50 dark:border-strokedark dark:text-white dark:hover:bg-meta-4"
+          >
+            Download Word
+          </button>
+
+          {canAddPayment && (
+            <button
+              onClick={() => setManualPaymentOpen(true)}
+              className="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700"
+            >
+              Add Payment
+            </button>
+          )}
+
           <Link
             href="/quotations"
             className="rounded border border-stroke px-4 py-2 text-sm text-black hover:bg-gray-50 dark:border-strokedark dark:text-white dark:hover:bg-meta-4"
@@ -262,7 +336,7 @@ export default function ViewQuotationPage() {
         <div className="max-w-full overflow-x-auto">
           <table className="w-full table-auto">
             <thead>
-              <tr className="bg-gray-2 text-left dark:bg-meta-4">
+              <tr className="text-left bg-gray-50 dark:bg-gray-800">
                 <th className="px-4 py-3 font-medium text-black dark:text-white">#</th>
                 <th className="px-4 py-3 font-medium text-black dark:text-white">Item Name</th>
                 <th className="px-4 py-3 font-medium text-black dark:text-white">Description</th>
@@ -288,7 +362,7 @@ export default function ViewQuotationPage() {
       </div>
 
       {/* Summary */}
-      <div className="mb-6 rounded border border-stroke bg-gray-50 p-4 dark:border-strokedark dark:bg-meta-4">
+      <div className="mb-6 rounded border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800">
         <h5 className="mb-3 font-semibold text-black dark:text-white">Summary</h5>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
@@ -301,24 +375,69 @@ export default function ViewQuotationPage() {
               <span className="font-medium text-black dark:text-white">-{formatCurrency(quotation.discountAmount)}</span>
             </div>
           )}
-          {quotation.cgstAmount > 0 && (
+
+          {/* New Framework-Based Tax Breakdown */}
+          {quotation.taxBreakdown && (() => {
+            try {
+              const breakdown = typeof quotation.taxBreakdown === 'string' 
+                ? JSON.parse(quotation.taxBreakdown) 
+                : quotation.taxBreakdown;
+              if (Array.isArray(breakdown) && breakdown.length > 0) {
+                return (
+                  <div className="mt-3 pt-2 border-t border-stroke dark:border-strokedark">
+                    <div className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">Tax Breakdown:</div>
+                    {breakdown.map((component: any, idx: number) => (
+                      <div key={idx} className="flex justify-between text-xs">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {component.component} ({component.rate}%):
+                        </span>
+                        <span className="font-medium text-black dark:text-white">
+                          {formatCurrency(component.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+            } catch (e) {
+              // Fall through to legacy display
+            }
+            return null;
+          })()}
+
+          {/* Legacy Tax Display (Fallback) */}
+          {(!quotation.taxBreakdown || (() => {
+            try {
+              const breakdown = typeof quotation.taxBreakdown === 'string' 
+                ? JSON.parse(quotation.taxBreakdown) 
+                : quotation.taxBreakdown;
+              return !Array.isArray(breakdown) || breakdown.length === 0;
+            } catch {
+              return true;
+            }
+          })()) && (
             <>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
-                <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.cgstAmount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
-                <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.sgstAmount)}</span>
-              </div>
+              {quotation.cgstAmount > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">CGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.cgstAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">SGST (9%):</span>
+                    <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.sgstAmount)}</span>
+                  </div>
+                </>
+              )}
+              {quotation.igstAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
+                  <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.igstAmount)}</span>
+                </div>
+              )}
             </>
           )}
-          {quotation.igstAmount > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">IGST (18%):</span>
-              <span className="font-medium text-black dark:text-white">{formatCurrency(quotation.igstAmount)}</span>
-            </div>
-          )}
+
           <div className="mt-3 flex justify-between border-t border-stroke pt-2 dark:border-strokedark">
             <span className="font-semibold text-black dark:text-white">Total Amount:</span>
             <span className="text-lg font-bold text-primary">{formatCurrency(quotation.totalAmount)}</span>
@@ -326,9 +445,25 @@ export default function ViewQuotationPage() {
         </div>
       </div>
 
+      {/* Template Preview - Intro & Terms */}
+      {templatePreview?.hasTemplate && templatePreview.content && (
+        <div className="mb-6 space-y-6">
+          {templateLoading ? (
+            <div className="rounded border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+              <div className="py-8 text-center text-gray-500">Loading template content...</div>
+            </div>
+          ) : (
+            <div 
+              className="template-sections"
+              dangerouslySetInnerHTML={{ __html: templatePreview.content }}
+            />
+          )}
+        </div>
+      )}
+
       {/* Notes */}
       {quotation.notes && (
-        <div className="mb-6 rounded border border-stroke p-4 dark:border-strokedark">
+        <div className="mb-6 rounded border border-gray-200 p-4 dark:border-gray-800">
           <h5 className="mb-2 font-semibold text-black dark:text-white">Notes</h5>
           <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{quotation.notes}</p>
         </div>
@@ -366,7 +501,7 @@ export default function ViewQuotationPage() {
       )}
 
       {/* Status Timeline & Client Response */}
-      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded border border-stroke p-4 dark:border-strokedark">
           <div className="mb-3 flex items-center justify-between">
             <h5 className="font-semibold text-black dark:text-white">Status Timeline</h5>
@@ -382,6 +517,35 @@ export default function ViewQuotationPage() {
             <ClientResponseCard response={responseData} />
           ) : (
             <p className="text-sm text-gray-500">No client response yet.</p>
+          )}
+        </div>
+        <div className="rounded border border-stroke p-4 dark:border-strokedark">
+          <h5 className="mb-3 font-semibold text-black dark:text-white">Payment History</h5>
+          {paymentHistory.length === 0 ? (
+            <p className="text-sm text-gray-500">No payments recorded yet.</p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-stroke text-left text-xs uppercase text-gray-500 dark:border-strokedark">
+                    <th className="px-2 py-2">Date</th>
+                    <th className="px-2 py-2">Gateway</th>
+                    <th className="px-2 py-2">Amount</th>
+                    <th className="px-2 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paymentHistory.map((p) => (
+                    <tr key={p.paymentId} className="border-b border-gray-100 text-xs dark:border-strokedark">
+                      <td className="px-2 py-2 text-gray-700 dark:text-gray-200">{p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : new Date(p.createdAt).toLocaleDateString()}</td>
+                      <td className="px-2 py-2 text-gray-600 dark:text-gray-300">{p.paymentGateway}</td>
+                      <td className="px-2 py-2 font-medium text-gray-900 dark:text-white">{formatCurrency(p.amountPaid)}</td>
+                      <td className="px-2 py-2 text-gray-600 dark:text-gray-300">{p.statusLabel}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -466,7 +630,7 @@ export default function ViewQuotationPage() {
       </div>
 
       {/* Access Link */}
-      <div className="rounded border border-stroke p-4 text-sm dark:border-strokedark">
+      <div className="rounded border border-gray-200 p-4 text-sm dark:border-gray-800">
         <h5 className="mb-3 font-semibold text-black dark:text-white">Access Link</h5>
         {accessLink ? (
           <div className="space-y-2">
@@ -475,7 +639,7 @@ export default function ViewQuotationPage() {
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium text-black dark:text-white">Link:</span>
-              <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-meta-4 dark:text-gray-200">
+              <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">
                 {accessLink.viewUrl}
               </span>
               <button
@@ -529,12 +693,24 @@ export default function ViewQuotationPage() {
         }}
       />
 
+      {manualPaymentOpen && (
+        <ManualPaymentModal
+          quotationId={quotationId}
+          defaultCurrency={quotation?.currency || "INR"}
+          onSuccess={async () => {
+            await loadQuotation();
+            setManualPaymentOpen(false);
+          }}
+          onClose={() => setManualPaymentOpen(false)}
+        />
+      )}
+
       {/* Adjustment Request Modal */}
       {showAdjustmentForm && quotation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
             {/* Modal Header */}
-            <div className="border-b border-gray-200 px-6 py-4">
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">Request Adjustment</h3>
@@ -544,7 +720,7 @@ export default function ViewQuotationPage() {
                 </div>
                 <button
                   onClick={() => setShowAdjustmentForm(false)}
-                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

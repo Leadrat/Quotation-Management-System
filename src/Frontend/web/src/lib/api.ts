@@ -2,10 +2,115 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
-import { getAccessToken } from "./session";
+import { getAccessToken, setAccessToken } from "./session";
+import type { Currency } from "../types/localization";
+
+// Track if we're currently refreshing to avoid multiple simultaneous refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  // If already refreshing, return the existing promise
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      // Call refresh endpoint directly to avoid circular dependency
+      const url = `${API_BASE}/api/v1/auth/refresh-token`;
+      const res = await fetch(url, {
+        method: "POST",
+        credentials: "include", // Include HttpOnly cookie with refresh token
+      });
+      
+      if (!res.ok) {
+        throw new Error("Token refresh failed");
+      }
+      
+      const result = await res.json();
+      if (result.success && result.accessToken) {
+        setAccessToken(result.accessToken);
+        return result.accessToken;
+      }
+      return null;
+    } catch (err) {
+      // Refresh failed - clear token and redirect to login
+      setAccessToken(null);
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+// Authenticated download helper that handles 401 -> token refresh, and saves file with filename
+async function downloadWithAuth(path: string, defaultFilename: string): Promise<void> {
+  const url = `${API_BASE}${path}`;
+  if (!url) throw new Error("Missing API base URL");
+  const headers = new Headers();
+  let token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let res = await fetch(url, { method: "GET", headers, credentials: "include" });
+
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      token = newToken;
+      headers.set("Authorization", `Bearer ${newToken}`);
+      res = await fetch(url, { method: "GET", headers, credentials: "include" });
+    }
+  }
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      message = body?.error || body?.message || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const disposition = res.headers.get("Content-Disposition") || res.headers.get("content-disposition");
+  let filename = defaultFilename;
+  if (disposition) {
+    // Try RFC5987 filename* and plain filename
+    const matchStar = disposition.match(/filename\*=UTF-8''([^;\n]+)/i);
+    const match = disposition.match(/filename="?([^";\n]+)"?/i);
+    if (matchStar && matchStar[1]) {
+      try { filename = decodeURIComponent(matchStar[1]); } catch { filename = matchStar[1]; }
+    } else if (match && match[1]) {
+      filename = match[1];
+    }
+  }
+
+  const blob = await res.blob();
+  const link = document.createElement("a");
+  const objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
 
 export async function apiFetch<T>(path: string, options: RequestInit & { auth?: boolean } = {}): Promise<T> {
+  if (!path || path.trim() === "") {
+    throw new Error("API path cannot be empty");
+  }
   const url = `${API_BASE}${path}`;
+  if (!url || url.trim() === "") {
+    throw new Error("API URL cannot be empty. Check NEXT_PUBLIC_API_BASE_URL environment variable.");
+  }
   const headers = new Headers(options.headers || {});
   // Only set Content-Type for JSON, not for FormData
   if (!(options.body instanceof FormData)) {
@@ -13,11 +118,27 @@ export async function apiFetch<T>(path: string, options: RequestInit & { auth?: 
   }
   const token = getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(url, {
+  
+  let res = await fetch(url, {
     ...options,
     headers,
     credentials: "include",
   });
+  
+  // If we get a 401 and this is not an auth endpoint, try to refresh the token
+  if (res.status === 401 && !path.includes("/auth/") && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry the original request with the new token
+      headers.set("Authorization", `Bearer ${newToken}`);
+      res = await fetch(url, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
+    }
+  }
+  
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     let errors: any = null;
@@ -37,8 +158,22 @@ export async function apiFetch<T>(path: string, options: RequestInit & { auth?: 
   }
   // Handle blob responses (for file downloads)
   const contentType = res.headers.get("content-type");
-  if (contentType && (contentType.includes("application/octet-stream") || contentType.includes("text/csv"))) {
-    return res.blob() as unknown as T;
+  if (contentType && (
+    contentType.includes("application/octet-stream") ||
+    contentType.includes("text/csv") ||
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+  )) {
+    const disposition = res.headers.get("Content-Disposition");
+    const filename = disposition && disposition.match(/filename="([^"]+)"/);
+    const blob = await res.blob();
+    if (filename) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename[1];
+      a.click();
+    }
+    return blob as unknown as T;
   }
   
   // try parse json
@@ -68,6 +203,19 @@ export const AuthApi = {
 };
 
 export const UsersApi = {
+  list: (params?: { pageNumber?: number; pageSize?: number; searchTerm?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+    if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+    if (params?.searchTerm) q.append("searchTerm", params.searchTerm);
+    return apiFetch<{ success: boolean; data: any[]; pageNumber: number; pageSize: number; totalCount: number }>(
+      `/api/v1/users${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (userId: string) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/users/${userId}`
+    ),
   create: (payload: any) =>
     apiFetch<{ success: boolean; userId: string }>(
       "/api/v1/users",
@@ -85,6 +233,22 @@ export const PasswordApi = {
     apiFetch<{ success: boolean; message?: string }>(
       "/api/v1/auth/change-password",
       { method: "POST", body: JSON.stringify(payload) }
+    ),
+};
+
+export const RolesApi = {
+  list: (params?: { isActive?: boolean; pageNumber?: number; pageSize?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+    if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+    if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+    return apiFetch<{ success: boolean; data: Array<{ roleId: string; roleName: string; description?: string; isActive: boolean }>; pageNumber: number; pageSize: number; totalCount: number }>(
+      `/api/v1/roles${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (roleId: string) =>
+    apiFetch<{ success: boolean; data: { roleId: string; roleName: string; description?: string; isActive: boolean } }>(
+      `/api/v1/roles/${roleId}`
     ),
 };
 
@@ -173,12 +337,17 @@ export const LocalizationApi = {
 };
 
 export const ReportsApi = {
+  getDashboardStats: () =>
+    apiFetch<{ success: boolean; data: { totalClients: number; totalQuotations: number; totalPayments: number; pendingApprovals: number } }>(
+      "/api/v1/reports/dashboard/stats"
+    ),
   getSalesDashboard: (fromDate?: string, toDate?: string) => {
     const params = new URLSearchParams();
     if (fromDate) params.append("fromDate", fromDate);
     if (toDate) params.append("toDate", toDate);
+    const queryString = params.toString();
     return apiFetch<{ success: boolean; data: import("../types/reports").SalesDashboardMetrics }>(
-      `/api/v1/reports/dashboard/sales?${params.toString()}`
+      `/api/v1/reports/dashboard/sales${queryString ? `?${queryString}` : ""}`
     );
   },
   getManagerDashboard: (teamId?: string, fromDate?: string, toDate?: string) => {
@@ -650,10 +819,18 @@ export const QuotationsApi = {
       if (err.message?.includes("204")) return undefined;
       throw err;
     }),
-  downloadPdf: (quotationId: string) => {
-    const url = `${API_BASE}/api/v1/quotations/${quotationId}/download-pdf`;
-    window.open(url, "_blank");
-  }
+  downloadPdf: async (quotationId: string) => {
+    const path = `/api/v1/quotations/${quotationId}/download-pdf`;
+    await downloadWithAuth(path, `Quotation-${quotationId}.pdf`);
+  },
+  downloadDocx: async (quotationId: string) => {
+    const path = `/api/v1/quotations/${quotationId}/download-docx`;
+    await downloadWithAuth(path, `Quotation-${quotationId}.docx`);
+  },
+  getTemplatePreview: (quotationId: string) =>
+    apiFetch<{ success: boolean; data: { hasTemplate: boolean; templateName?: string; fileName?: string; content?: string; rawText?: string } }>(
+      `/api/v1/quotations/${quotationId}/template-preview`
+    )
 };
 
 export const ClientPortalApi = {
@@ -698,6 +875,10 @@ export const ClientPortalApi = {
     const url = `${API_BASE}/api/v1/client-portal/quotations/${quotationId}/${accessToken}/download`;
     window.open(url, "_blank");
   },
+  getQuotationTemplatePreview: (quotationId: string, accessToken: string) =>
+    apiFetch<{ hasTemplate: boolean; templateName?: string; content?: string }>(
+      `/api/v1/client-portal/quotations/${quotationId}/${accessToken}/template-preview`
+    ),
 };
 
 export const TemplatesApi = {
@@ -791,6 +972,45 @@ export const TemplatesApi = {
       success: boolean;
       data: import("../types/templates").QuotationTemplate[];
     }>("/api/v1/quotation-templates/public"),
+  upload: (formData: FormData) =>
+    apiFetch<{ success: boolean; data: import("../types/templates").QuotationTemplate }>(
+      "/api/v1/quotation-templates/upload",
+      { method: "POST", body: formData, auth: true }
+    ),
+};
+
+export const DocumentTemplatesApi = {
+  list: (params: { templateType?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.templateType) {
+      q.set("templateType", params.templateType);
+    }
+    const query = q.toString();
+    const path = query ? `/api/v1/document-templates?${query}` : "/api/v1/document-templates";
+    return apiFetch<{
+      success: boolean;
+      data: import("../types/templates").QuotationTemplate[];
+    }>(path);
+  },
+  upload: (formData: FormData) =>
+    apiFetch<{ success: boolean; data: import("../types/templates").QuotationTemplate }>(
+      "/api/v1/document-templates/upload",
+      { method: "POST", body: formData, auth: true }
+    ),
+  getPlaceholders: (templateId: string) =>
+    apiFetch<{ success: boolean; data: Array<{ placeholderName: string; placeholderType: string; defaultValue?: string }> }>(
+      `/api/v1/document-templates/${templateId}/placeholders`
+    ),
+  savePlaceholders: (templateId: string, placeholders: Array<{ placeholderName: string; placeholderType: string; defaultValue?: string }>) =>
+    apiFetch<{ success: boolean }>(
+      `/api/v1/document-templates/${templateId}/placeholders`,
+      { method: "POST", body: JSON.stringify(placeholders) }
+    ),
+  convert: (templateId: string) =>
+    apiFetch<{ success: boolean; data: import("../types/templates").QuotationTemplate }>(
+      `/api/v1/document-templates/${templateId}/convert`,
+      { method: "POST" }
+    ),
 };
 
 export const DiscountApprovalsApi = {
@@ -949,6 +1169,42 @@ export const PaymentsApi = {
       "/api/v1/payments/initiate",
       { method: "POST", body: JSON.stringify(request) }
     ),
+  createManual: (quotationId: string, payload: { amountReceived: number; currency?: string; method?: string; paymentDate?: string; remarks?: string }) =>
+    apiFetch<import("../types/payments").PaymentDto>(
+      `/api/v1/quotations/${quotationId}/payments`,
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  updateManual: (paymentId: string, payload: { amountReceived: number; currency?: string; method?: string; paymentDate?: string; remarks?: string }) =>
+    apiFetch<import("../types/payments").PaymentDto>(
+      `/api/v1/payments/${paymentId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  getStats: (params: { startDate?: string; endDate?: string } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return apiFetch<{ success: boolean; summary: any; statusCounts: Array<{ status: string; count: number; totalAmount: number }>; acceptedPending?: { amount: number; quotationCount: number } }>(
+      `/api/v1/payments/stats${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getOutstanding: (quotationId: string) =>
+    apiFetch<{ success: boolean; data: { quotationId: string; totalAmount: number; paidNet: number; outstanding: number } }>(
+      `/api/v1/quotations/${quotationId}/payments/outstanding`
+    ),
+  getQuotationHistory: (quotationId: string) =>
+    apiFetch<{ success: boolean; data: import("../types/payments").PaymentDto[] }>(
+      `/api/v1/quotations/${quotationId}/payments/history`
+    ),
+  list: (params: { status?: string; startDate?: string; endDate?: string; pageNumber?: number; pageSize?: number } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return apiFetch<{ success: boolean; data: import("../types/payments").PaymentDto[]; pageNumber: number; pageSize: number; totalCount: number }>(
+      `/api/v1/payments${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
   getById: (paymentId: string) =>
     apiFetch<import("../types/payments").PaymentDto>(
       `/api/v1/payments/${paymentId}`
@@ -1179,3 +1435,663 @@ export const AdminApi = {
       { method: "POST", body: JSON.stringify(payload) }
     ),
 };
+
+// User Management API (Spec-019)
+export const CountriesApi = {
+  list: (params?: { isActive?: boolean; pageNumber?: number; pageSize?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+    if (params?.pageNumber !== undefined) q.append("pageNumber", params.pageNumber.toString());
+    if (params?.pageSize !== undefined) q.append("pageSize", params.pageSize.toString());
+    return apiFetch<{ success: boolean; data: any[]; pageNumber?: number; pageSize?: number; totalCount?: number }>(
+      `/api/v1/admin/tax/countries${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (countryId: string) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/countries/${countryId}`
+    ),
+  create: (payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      "/api/v1/admin/tax/countries",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (countryId: string, payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/countries/${countryId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+};
+
+export const TaxFrameworksApi = {
+  list: (params?: { countryId?: string; isActive?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.countryId) q.append("countryId", params.countryId);
+    if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+    return apiFetch<{ success: boolean; data: any[] }>(
+      `/api/v1/admin/tax/frameworks${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (frameworkId: string) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/frameworks/${frameworkId}`
+    ),
+  create: (payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      "/api/v1/admin/tax/frameworks",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (frameworkId: string, payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/frameworks/${frameworkId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+};
+
+export const JurisdictionsApi = {
+  listByCountry: (countryId: string) =>
+    apiFetch<{ success: boolean; data: any[] }>(
+      `/api/v1/admin/tax/countries/${countryId}/jurisdictions`
+    ),
+  getById: (jurisdictionId: string) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/jurisdictions/${jurisdictionId}`
+    ),
+  create: (payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      "/api/v1/admin/tax/jurisdictions",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (jurisdictionId: string, payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/jurisdictions/${jurisdictionId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  delete: (jurisdictionId: string) =>
+    apiFetch<{ success: boolean }>(
+      `/api/v1/admin/tax/jurisdictions/${jurisdictionId}`,
+      { method: "DELETE" }
+    ),
+};
+
+export const ProductServiceCategoriesApi = {
+  list: (params?: { isActive?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+    return apiFetch<{ success: boolean; data: any[] }>(
+      `/api/v1/admin/tax/categories${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (categoryId: string) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/categories/${categoryId}`
+    ),
+  create: (payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      "/api/v1/admin/tax/categories",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (categoryId: string, payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/categories/${categoryId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+};
+
+export const TaxRatesApi = {
+  list: (params?: { jurisdictionId?: string; taxFrameworkId?: string; productServiceCategoryId?: string; asOfDate?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.jurisdictionId) q.append("jurisdictionId", params.jurisdictionId);
+    if (params?.taxFrameworkId) q.append("taxFrameworkId", params.taxFrameworkId);
+    if (params?.productServiceCategoryId) q.append("productServiceCategoryId", params.productServiceCategoryId);
+    if (params?.asOfDate) q.append("asOfDate", params.asOfDate);
+    return apiFetch<{ success: boolean; data: any[] }>(
+      `/api/v1/admin/tax/rates${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getByJurisdiction: (jurisdictionId: string, params?: { productServiceCategoryId?: string; asOfDate?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.productServiceCategoryId) q.append("productServiceCategoryId", params.productServiceCategoryId);
+    if (params?.asOfDate) q.append("asOfDate", params.asOfDate);
+    return apiFetch<{ success: boolean; data: any[] }>(
+      `/api/v1/admin/tax/rates/jurisdiction/${jurisdictionId}${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  create: (payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      "/api/v1/admin/tax/rates",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (taxRateId: string, payload: any) =>
+    apiFetch<{ success: boolean; data: any }>(
+      `/api/v1/admin/tax/rates/${taxRateId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  delete: (taxRateId: string) =>
+    apiFetch<{ success: boolean }>(
+      `/api/v1/admin/tax/rates/${taxRateId}`,
+      { method: "DELETE" }
+    ),
+};
+
+export const TaxCalculationApi = {
+  getCountries: () =>
+    apiFetch<{ success: boolean; data: Array<{ countryId: string; countryName: string; countryCode: string; isDefault: boolean }> }>(
+      "/api/v1/tax/calculation/countries"
+    ),
+  preview: (payload: {
+    clientId: string;
+    lineItems: Array<{ lineItemId: string; productServiceCategoryId?: string; amount: number }>;
+    subtotal: number;
+    discountAmount: number;
+    calculationDate?: string;
+    countryId?: string;
+  }) =>
+    apiFetch<{ success: boolean; data: any }>(
+      "/api/v1/tax/calculation/preview",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+};
+
+export const TaxAuditLogApi = {
+  list: (params?: {
+    quotationId?: string;
+    countryId?: string;
+    jurisdictionId?: string;
+    fromDate?: string;
+    toDate?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.quotationId) q.append("quotationId", params.quotationId);
+    if (params?.countryId) q.append("countryId", params.countryId);
+    if (params?.jurisdictionId) q.append("jurisdictionId", params.jurisdictionId);
+    if (params?.fromDate) q.append("fromDate", params.fromDate);
+    if (params?.toDate) q.append("toDate", params.toDate);
+    if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+    if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+    return apiFetch<{ success: boolean; data: any[]; pageNumber: number; pageSize: number; totalCount: number }>(
+      `/api/v1/admin/tax/audit-log${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+};
+
+export const UserManagementApi = {
+  // Teams
+  teams: {
+    list: (params?: { pageNumber?: number; pageSize?: number; teamLeadUserId?: string; companyId?: string; isActive?: boolean }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.teamLeadUserId) q.append("teamLeadUserId", params.teamLeadUserId);
+      if (params?.companyId) q.append("companyId", params.companyId);
+      if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+      return apiFetch<import("../types/userManagement").PagedResult<import("../types/userManagement").Team>>(
+        `/api/v1/teams${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+    getById: (teamId: string) =>
+      apiFetch<{ success: boolean; data: import("../types/userManagement").Team }>(
+        `/api/v1/teams/${teamId}`
+      ),
+    create: (payload: import("../types/userManagement").CreateTeamRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").Team }>(
+        "/api/v1/teams",
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    update: (teamId: string, payload: import("../types/userManagement").UpdateTeamRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").Team }>(
+        `/api/v1/teams/${teamId}`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+    delete: (teamId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/teams/${teamId}`,
+        { method: "DELETE" }
+      ),
+    addMember: (teamId: string, payload: import("../types/userManagement").AddTeamMemberRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").TeamMember }>(
+        `/api/v1/teams/${teamId}/members`,
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    removeMember: (teamId: string, userId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/teams/${teamId}/members/${userId}`,
+        { method: "DELETE" }
+      ),
+    getMembers: (teamId: string, params?: { pageNumber?: number; pageSize?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      return apiFetch<import("../types/userManagement").PagedResult<import("../types/userManagement").TeamMember>>(
+        `/api/v1/teams/${teamId}/members${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+  },
+
+  // User Groups
+  userGroups: {
+    list: (params?: { pageNumber?: number; pageSize?: number; createdByUserId?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.createdByUserId) q.append("createdByUserId", params.createdByUserId);
+      return apiFetch<import("../types/userManagement").PagedResult<import("../types/userManagement").UserGroup>>(
+        `/api/v1/user-groups${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+    getById: (groupId: string) =>
+      apiFetch<{ success: boolean; data: import("../types/userManagement").UserGroup }>(
+        `/api/v1/user-groups/${groupId}`
+      ),
+    create: (payload: import("../types/userManagement").CreateUserGroupRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").UserGroup }>(
+        "/api/v1/user-groups",
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    update: (groupId: string, payload: import("../types/userManagement").UpdateUserGroupRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").UserGroup }>(
+        `/api/v1/user-groups/${groupId}`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+    addMember: (groupId: string, userId: string) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").UserGroupMember }>(
+        `/api/v1/user-groups/${groupId}/members`,
+        { method: "POST", body: JSON.stringify({ userId }) }
+      ),
+    removeMember: (groupId: string, userId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/user-groups/${groupId}/members/${userId}`,
+        { method: "DELETE" }
+      ),
+  },
+
+  // Task Assignments
+  tasks: {
+    assign: (payload: import("../types/userManagement").AssignTaskRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").TaskAssignment }>(
+        "/api/v1/task-assignments",
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    getUserTasks: (userId: string, params?: { pageNumber?: number; pageSize?: number; status?: string; entityType?: string; dueDateFrom?: string; dueDateTo?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.status) q.append("status", params.status);
+      if (params?.entityType) q.append("entityType", params.entityType);
+      if (params?.dueDateFrom) q.append("dueDateFrom", params.dueDateFrom);
+      if (params?.dueDateTo) q.append("dueDateTo", params.dueDateTo);
+      return apiFetch<import("../types/userManagement").PagedResult<import("../types/userManagement").TaskAssignment>>(
+        `/api/v1/task-assignments/user/${userId}${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+    updateStatus: (assignmentId: string, payload: import("../types/userManagement").UpdateTaskStatusRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").TaskAssignment }>(
+        `/api/v1/task-assignments/${assignmentId}/status`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+    delete: (assignmentId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/task-assignments/${assignmentId}`,
+        { method: "DELETE" }
+      ),
+  },
+
+  // Activity Feed
+  activity: {
+    getFeed: (params?: { pageNumber?: number; pageSize?: number; userId?: string; actionType?: string; entityType?: string; fromDate?: string; toDate?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.userId) q.append("userId", params.userId);
+      if (params?.actionType) q.append("actionType", params.actionType);
+      if (params?.entityType) q.append("entityType", params.entityType);
+      if (params?.fromDate) q.append("fromDate", params.fromDate);
+      if (params?.toDate) q.append("toDate", params.toDate);
+      return apiFetch<import("../types/userManagement").PagedActivityFeedResult>(
+        `/api/v1/activity-feed${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+    getUserActivity: (userId: string, params?: { pageNumber?: number; pageSize?: number; actionType?: string; fromDate?: string; toDate?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.actionType) q.append("actionType", params.actionType);
+      if (params?.fromDate) q.append("fromDate", params.fromDate);
+      if (params?.toDate) q.append("toDate", params.toDate);
+      return apiFetch<import("../types/userManagement").PagedActivityFeedResult>(
+        `/api/v1/activity-feed/users/${userId}/activity${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+  },
+
+  // Mentions
+  mentions: {
+    create: (payload: import("../types/userManagement").CreateMentionRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").Mention }>(
+        "/api/v1/mentions",
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    getUserMentions: (userId: string, params?: { pageNumber?: number; pageSize?: number; isRead?: boolean }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.isRead !== undefined) q.append("isRead", params.isRead.toString());
+      return apiFetch<import("../types/userManagement").PagedMentionsResult>(
+        `/api/v1/mentions/user/${userId}${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+    getUnreadCount: (userId: string) =>
+      apiFetch<{ success: boolean; count: number }>(
+        `/api/v1/mentions/user/${userId}/unread-count`
+      ),
+    markAsRead: (mentionId: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/mentions/${mentionId}/mark-read`,
+        { method: "PUT" }
+      ),
+  },
+
+  // User Profiles
+  profiles: {
+    getProfile: (userId: string) =>
+      apiFetch<{ success: boolean; data: import("../types/userManagement").EnhancedUserProfile }>(
+        `/api/v1/user-profiles/${userId}`
+      ),
+    updateProfile: (userId: string, payload: import("../types/userManagement").UpdateUserProfileRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").EnhancedUserProfile }>(
+        `/api/v1/user-profiles/${userId}`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+    setOutOfOffice: (userId: string, payload: import("../types/userManagement").SetOutOfOfficeRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").EnhancedUserProfile }>(
+        `/api/v1/user-profiles/${userId}/out-of-office`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+    updatePresence: (userId: string, status: string) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/user-profiles/${userId}/presence`,
+        { method: "PUT", body: JSON.stringify(status) }
+      ),
+  },
+
+  // Bulk Operations
+  bulk: {
+    inviteUsers: (payload: import("../types/userManagement").BulkInviteUsersRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").BulkOperationResult }>(
+        "/api/v1/bulk-user-operations/invite",
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    updateUsers: (payload: import("../types/userManagement").BulkUpdateUsersRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").BulkOperationResult }>(
+        "/api/v1/bulk-user-operations/update",
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+    deactivateUsers: (userIds: string[]) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").BulkOperationResult }>(
+        "/api/v1/bulk-user-operations/deactivate",
+        { method: "POST", body: JSON.stringify(userIds) }
+      ),
+    exportUsers: (params?: { format?: string; roleId?: string; teamId?: string; isActive?: boolean; createdFrom?: string; createdTo?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.format) q.append("format", params.format);
+      if (params?.roleId) q.append("roleId", params.roleId);
+      if (params?.teamId) q.append("teamId", params.teamId);
+      if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+      if (params?.createdFrom) q.append("createdFrom", params.createdFrom);
+      if (params?.createdTo) q.append("createdTo", params.createdTo);
+      const url = `${API_BASE}/api/v1/bulk-user-operations/export${q.toString() ? `?${q.toString()}` : ""}`;
+      const token = getAccessToken();
+      const headers = new Headers();
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+      return fetch(url, { headers, credentials: "include" })
+        .then(res => res.blob())
+        .then(blob => {
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = downloadUrl;
+          a.download = `users_export_${new Date().toISOString().split("T")[0]}.${params?.format?.toLowerCase() || "csv"}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(downloadUrl);
+          document.body.removeChild(a);
+        });
+    },
+  },
+
+  // Custom Roles
+  customRoles: {
+    list: (params?: { pageNumber?: number; pageSize?: number; isActive?: boolean; includeBuiltIn?: boolean }) => {
+      const q = new URLSearchParams();
+      if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+      if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+      if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+      if (params?.includeBuiltIn !== undefined) q.append("includeBuiltIn", params.includeBuiltIn.toString());
+      return apiFetch<import("../types/userManagement").PagedResult<import("../types/userManagement").CustomRole>>(
+        `/api/v1/custom-roles${q.toString() ? `?${q.toString()}` : ""}`
+      );
+    },
+    getAvailablePermissions: () =>
+      apiFetch<{ success: boolean; data: import("../types/userManagement").Permission[] }>(
+        "/api/v1/custom-roles/permissions"
+      ),
+    create: (payload: import("../types/userManagement").CreateCustomRoleRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").CustomRole }>(
+        "/api/v1/custom-roles",
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+    updatePermissions: (roleId: string, payload: import("../types/userManagement").UpdateRolePermissionsRequest) =>
+      apiFetch<{ success: boolean; message: string; data: import("../types/userManagement").CustomRole }>(
+        `/api/v1/custom-roles/${roleId}/permissions`,
+        { method: "PUT", body: JSON.stringify(payload) }
+      ),
+  },
+};
+
+export const ProductsApi = {
+  list: (params?: {
+    pageNumber?: number;
+    pageSize?: number;
+    productType?: import("../types/products").ProductType;
+    categoryId?: string;
+    isActive?: boolean;
+    search?: string;
+    currency?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+    if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+    if (params?.productType) q.append("productType", params.productType);
+    if (params?.categoryId) q.append("categoryId", params.categoryId);
+    if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+    if (params?.search) q.append("search", params.search);
+    if (params?.currency) q.append("currency", params.currency);
+    return apiFetch<import("../types/products").PagedProductResult>(
+      `/api/v1/products${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (productId: string) =>
+    apiFetch<{ success: boolean; data: import("../types/products").Product }>(
+      `/api/v1/products/${productId}`
+    ),
+  create: (payload: import("../types/products").CreateProductRequest) =>
+    apiFetch<{ success: boolean; message: string; data: import("../types/products").Product }>(
+      "/api/v1/products",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (productId: string, payload: Partial<import("../types/products").CreateProductRequest>) =>
+    apiFetch<{ success: boolean; message: string; data: import("../types/products").Product }>(
+      `/api/v1/products/${productId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  delete: (productId: string) =>
+    apiFetch<{ success: boolean; message?: string }>(
+      `/api/v1/products/${productId}`,
+      { method: "DELETE" }
+    ),
+  getCatalog: (params?: {
+    pageNumber?: number;
+    pageSize?: number;
+    productType?: import("../types/products").ProductType;
+    categoryId?: string;
+    search?: string;
+    currency?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.pageNumber) q.append("pageNumber", params.pageNumber.toString());
+    if (params?.pageSize) q.append("pageSize", params.pageSize.toString());
+    if (params?.productType) {
+      // Convert ProductType string to enum integer value (backend enum starts at 1)
+      const productTypeMap: Record<import("../types/products").ProductType, number> = {
+        "Subscription": 1,
+        "AddOnSubscription": 2,
+        "AddOnOneTime": 3,
+        "CustomDevelopment": 4,
+      };
+      const enumValue = productTypeMap[params.productType];
+      if (enumValue !== undefined) {
+        q.append("productType", enumValue.toString());
+      }
+    }
+    if (params?.categoryId) q.append("categoryId", params.categoryId);
+    if (params?.search) q.append("search", params.search);
+    if (params?.currency) q.append("currency", params.currency);
+    return apiFetch<import("../types/products").PagedProductCatalogResult>(
+      `/api/v1/products/catalog${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  calculatePrice: (payload: import("../types/products").ProductPriceCalculationRequest) =>
+    apiFetch<{ success: boolean; data: import("../types/products").ProductPriceCalculationResponse }>(
+      "/api/v1/products/calculate-price",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+    getUsageStats: (productId: string) =>
+      apiFetch<{ success: boolean; data: import("../types/products").ProductUsageStats }>(
+        `/api/v1/products/${productId}/usage`
+      ),
+    addProductToQuotation: (quotationId: string, payload: {
+      productId: string;
+      quantity: number;
+      billingCycle?: number;
+      hours?: number;
+      taxCategoryId?: string;
+    }) =>
+      apiFetch<{ success: boolean; data: import("../types/quotations").LineItemDto; message?: string }>(
+        `/api/v1/products/quotations/${quotationId}/add-product`,
+        { method: "POST", body: JSON.stringify(payload) }
+      ),
+  };
+
+export const ProductCategoriesApi = {
+  list: (params?: { parentCategoryId?: string; isActive?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.parentCategoryId) q.append("parentCategoryId", params.parentCategoryId);
+    if (params?.isActive !== undefined) q.append("isActive", params.isActive.toString());
+    return apiFetch<{ success: boolean; data: import("../types/products").ProductCategory[] }>(
+      `/api/v1/product-categories${q.toString() ? `?${q.toString()}` : ""}`
+    );
+  },
+  getById: (categoryId: string) =>
+    apiFetch<{ success: boolean; data: import("../types/products").ProductCategory }>(
+      `/api/v1/product-categories/${categoryId}`
+    ),
+  create: (payload: import("../types/products").CreateProductCategoryRequest) =>
+    apiFetch<{ success: boolean; message: string; data: import("../types/products").ProductCategory }>(
+      "/api/v1/product-categories",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+  update: (categoryId: string, payload: import("../types/products").UpdateProductCategoryRequest) =>
+    apiFetch<{ success: boolean; message: string; data: import("../types/products").ProductCategory }>(
+      `/api/v1/product-categories/${categoryId}`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+};
+
+export const CompanyDetailsApi = {
+  get: () =>
+    apiFetch<{ success: boolean; data: {
+      companyDetailsId: string;
+      panNumber?: string;
+      tanNumber?: string;
+      gstNumber?: string;
+      companyName?: string;
+      companyAddress?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      country?: string;
+      countryId?: string;
+      contactEmail?: string;
+      contactPhone?: string;
+      website?: string;
+      legalDisclaimer?: string;
+      logoUrl?: string;
+      updatedAt: string;
+      bankDetails: Array<{
+        bankDetailsId: string;
+        country: string;
+        accountNumber: string;
+        ifscCode?: string;
+        iban?: string;
+        swiftCode?: string;
+        bankName: string;
+        branchName?: string;
+      }>;
+    } }>(
+      "/api/v1/company-details"
+    ),
+  update: (payload: {
+    panNumber?: string;
+    tanNumber?: string;
+    gstNumber?: string;
+    companyName?: string;
+    companyAddress?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    countryId?: string; // Required for country-specific storage
+    contactEmail?: string;
+    contactPhone?: string;
+    website?: string;
+    legalDisclaimer?: string;
+    logoUrl?: string;
+    bankDetails: Array<{
+      bankDetailsId?: string;
+      country: string;
+      accountNumber: string;
+      ifscCode?: string;
+      iban?: string;
+      swiftCode?: string;
+      bankName: string;
+      branchName?: string;
+    }>;
+  }) =>
+    apiFetch<{ success: boolean; message: string; data: any }>(
+      "/api/v1/company-details",
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  uploadLogo: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetch<{ success: boolean; message: string; data: any }>(
+      "/api/v1/company-details/logo",
+      { method: "POST", body: formData }
+    );
+  },
+};
+
+// Export new API clients
+export { IdentifierTypesApi } from "./api/identifierTypes";
+export { CountryIdentifierConfigurationsApi } from "./api/countryIdentifierConfigurations";
+export { BankFieldTypesApi } from "./api/bankFieldTypes";
+export { CountryBankFieldConfigurationsApi } from "./api/countryBankFieldConfigurations";
+export { CompanyIdentifiersApi } from "./api/companyIdentifiers";
+export { CompanyBankDetailsApi } from "./api/companyBankDetails";
+export type { IdentifierType, CreateIdentifierTypeRequest, UpdateIdentifierTypeRequest } from "./api/identifierTypes";
+export type { CountryIdentifierConfiguration, ConfigureCountryIdentifierRequest, UpdateCountryIdentifierConfigurationRequest } from "./api/countryIdentifierConfigurations";
+export type { BankFieldType, CreateBankFieldTypeRequest, UpdateBankFieldTypeRequest } from "./api/bankFieldTypes";
+export type { CountryBankFieldConfiguration, ConfigureCountryBankFieldRequest, UpdateCountryBankFieldConfigurationRequest } from "./api/countryBankFieldConfigurations";
+export type { CompanyIdentifierField, CompanyIdentifierValues, SaveCompanyIdentifierValuesRequest } from "./api/companyIdentifiers";
+export type { CompanyBankField, CompanyBankDetails, SaveCompanyBankDetailsRequest } from "./api/companyBankDetails";

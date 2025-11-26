@@ -29,11 +29,26 @@ namespace CRM.Domain.Entities
         public decimal? DiscountDefault { get; set; }
         public string? Notes { get; set; }
 
+        // File-based template properties
+        public string? TemplateType { get; set; } // "Quotation" or "ProFormaInvoice"
+        public bool IsFileBased { get; set; } = false;
+        public string? FileName { get; set; }
+        public string? FileUrl { get; set; } // Path or URL to stored file
+        public long? FileSize { get; set; } // File size in bytes
+        public string? MimeType { get; set; } // MIME type of the file
+        
+        // Additional file-based template properties (Spec-024)
+        public string? TemplateFilePath { get; set; } // Relative path to Word template file
+        public string? OriginalFileName { get; set; } // Original uploaded file name
+        public string? ProcessingStatus { get; set; } // 'Pending', 'Processing', 'Completed', 'Failed'
+        public string? ProcessingErrorMessage { get; set; } // Error message if processing failed
+
         // Navigation properties
         public virtual User OwnerUser { get; set; } = null!;
         public virtual User? ApprovedByUser { get; set; }
         public virtual QuotationTemplate? PreviousVersion { get; set; }
         public virtual ICollection<QuotationTemplateLineItem> LineItems { get; set; } = new List<QuotationTemplateLineItem>();
+        public virtual ICollection<TemplatePlaceholder> Placeholders { get; set; } = new List<TemplatePlaceholder>();
 
         // Domain methods
         public bool IsDeleted() => DeletedAt.HasValue;

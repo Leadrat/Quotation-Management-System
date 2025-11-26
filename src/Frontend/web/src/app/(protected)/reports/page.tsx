@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { ReportsApi } from "@/lib/api";
 import type { SalesDashboardMetrics } from "@/types/reports";
 import { SalesDashboardCards } from "@/components/reports/SalesDashboardCards";
-import { QuotationTrendChart } from "@/components/reports/QuotationTrendChart";
+import QuotationTrendChart from "@/components/reports/QuotationTrendChart";
 import { StatusBreakdownChart } from "@/components/reports/StatusBreakdownChart";
 import { TopClientsTable } from "@/components/reports/TopClientsTable";
 import { RecentQuotationsTable } from "@/components/reports/RecentQuotationsTable";
+import PageBreadcrumb from "@/components/tailadmin/common/PageBreadCrumb";
+import Alert from "@/components/tailadmin/ui/alert/Alert";
+import ComponentCard from "@/components/tailadmin/common/ComponentCard";
 
 export default function ReportsPage() {
   const [metrics, setMetrics] = useState<SalesDashboardMetrics | null>(null);
@@ -27,7 +30,15 @@ export default function ReportsPage() {
         setMetrics(response.data);
       }
     } catch (err: any) {
-      setError(err.message || "Failed to load dashboard");
+      let errorMessage = err.message || "Failed to load dashboard";
+      if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
+        errorMessage += `: ${err.errors.join(", ")}`;
+      }
+      if (err.details) {
+        errorMessage += ` (${err.details})`;
+      }
+      setError(errorMessage);
+      console.error("Dashboard load error:", err);
     } finally {
       setLoading(false);
     }
@@ -35,19 +46,23 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <>
+        <PageBreadcrumb pageTitle="Reports" />
+        <ComponentCard title="Loading">
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500"></div>
+          </div>
+        </ComponentCard>
+      </>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      </div>
+      <>
+        <PageBreadcrumb pageTitle="Reports" />
+        <Alert variant="error" title="Error" message={error || "An error occurred"} />
+      </>
     );
   }
 
@@ -56,10 +71,12 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-6">
+    <>
+      <PageBreadcrumb pageTitle="Sales Dashboard" />
+
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Sales Dashboard</h1>
-        <p className="text-gray-600 mt-1">Overview of your sales performance</p>
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Sales Dashboard</h2>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">Overview of your sales performance</p>
       </div>
 
       <SalesDashboardCards metrics={metrics} />
@@ -73,7 +90,7 @@ export default function ReportsPage() {
         <TopClientsTable clients={metrics.topClients} />
         <RecentQuotationsTable quotations={metrics.recentQuotations} />
       </div>
-    </div>
+    </>
   );
 }
 

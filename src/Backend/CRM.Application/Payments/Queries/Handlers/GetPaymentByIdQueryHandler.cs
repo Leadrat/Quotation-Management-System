@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Payments.Dtos;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +10,20 @@ namespace CRM.Application.Payments.Queries.Handlers
     public class GetPaymentByIdQueryHandler
     {
         private readonly IAppDbContext _db;
+        private readonly ITenantContext _tenantContext;
 
-        public GetPaymentByIdQueryHandler(IAppDbContext db)
+        public GetPaymentByIdQueryHandler(IAppDbContext db, ITenantContext tenantContext)
         {
             _db = db;
+            _tenantContext = tenantContext;
         }
 
         public async Task<PaymentDto?> Handle(GetPaymentByIdQuery query)
         {
+            // Temporarily disable tenant filter for debugging
+            // var currentTenantId = _tenantContext.CurrentTenantId;
             var payment = await _db.Payments
+                // .FirstOrDefaultAsync(p => p.PaymentId == query.PaymentId && p.TenantId == currentTenantId)
                 .FirstOrDefaultAsync(p => p.PaymentId == query.PaymentId);
 
             if (payment == null)

@@ -1,11 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { PaymentsApi } from "@/lib/api";
-import type { PaymentDto } from "@/types/payments";
-import { PaymentStatusBadge } from "./PaymentStatusBadge";
-import { PaymentModal } from "./PaymentModal";
-
 interface QuotationPaymentSectionProps {
   quotationId: string;
   totalAmount: number;
@@ -17,94 +11,31 @@ export function QuotationPaymentSection({
   totalAmount,
   currency = "INR",
 }: QuotationPaymentSectionProps) {
-  const [payments, setPayments] = useState<PaymentDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    loadPayments();
-  }, [quotationId]);
-
-  const loadPayments = async () => {
-    try {
-      setLoading(true);
-      const data = await PaymentsApi.getByQuotation(quotationId);
-      setPayments(data);
-    } catch (err) {
-      console.error("Failed to load payments:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const hasSuccessfulPayment = payments.some((p) => p.paymentStatus === 2); // Success
-
-  if (loading) {
-    return <div className="text-sm text-gray-500">Loading payment information...</div>;
-  }
-
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Payment Information</h3>
-        {!hasSuccessfulPayment && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="flex flex-col items-center justify-center py-8">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+          <svg
+            className="h-8 w-8 text-gray-400 dark:text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            Initiate Payment
-          </button>
-        )}
-      </div>
-
-      {payments.length === 0 ? (
-        <p className="text-sm text-gray-500">No payments found for this quotation.</p>
-      ) : (
-        <div className="space-y-3">
-          {payments.map((payment) => (
-            <div key={payment.paymentId} className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {payment.paymentGateway} Payment
-                  </p>
-                  <p className="text-xs text-gray-500 font-mono">
-                    {payment.paymentReference}
-                  </p>
-                </div>
-                <PaymentStatusBadge status={payment.paymentStatus} />
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Amount:</span>
-                <span className="font-semibold">
-                  {payment.currency} {payment.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              {payment.paymentDate && (
-                <div className="flex items-center justify-between text-sm mt-1">
-                  <span className="text-gray-600">Date:</span>
-                  <span className="text-gray-900">
-                    {new Date(payment.paymentDate).toLocaleString()}
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
         </div>
-      )}
-
-      {showModal && (
-        <PaymentModal
-          quotationId={quotationId}
-          amount={totalAmount}
-          currency={currency}
-          onSuccess={(payment) => {
-            setPayments([...payments, payment]);
-            setShowModal(false);
-          }}
-          onClose={() => setShowModal(false)}
-        />
-      )}
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-2">
+          Payment Coming Soon
+        </h3>
+        <p className="text-sm text-center text-gray-500 dark:text-gray-400 max-w-sm">
+          Payment processing will be available soon. For now, please contact us directly to complete your payment.
+        </p>
+      </div>
     </div>
   );
 }

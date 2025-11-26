@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LocalizationApi } from "../../../lib/api";
-import { getUserPreferences, setUserPreferences } from "../../../lib/i18n";
-import { useLocale } from "../../../context/LocaleContext";
-import { FormatPreview } from "../../../components/localization";
-import type { UserPreferences, UpdateUserPreferencesRequest, SupportedLanguage, Currency } from "../../../types/localization";
+import { LocalizationApi } from "../../../../lib/api";
+import { getUserPreferences, setUserPreferences } from "../../../../lib/i18n";
+import { useLocale } from "../../../../context/LocaleContext";
+import { FormatPreview } from "../../../../components/localization";
+import type { UserPreferences, UpdateUserPreferencesRequest, SupportedLanguage, Currency } from "../../../../types/localization";
 
 export default function PreferencesPage() {
   const { preferences: localePrefs, updatePreferences } = useLocale();

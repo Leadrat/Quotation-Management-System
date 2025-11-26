@@ -188,6 +188,11 @@ namespace CRM.Tests.Quotations
             {
                 return Task.CompletedTask;
             }
+
+            public Task SendSimpleEmailAsync(string recipientEmail, string subject, string htmlBody)
+            {
+                return Task.CompletedTask;
+            }
         }
     }
 }

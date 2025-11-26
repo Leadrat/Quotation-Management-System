@@ -58,6 +58,25 @@ namespace CRM.Infrastructure.EntityConfigurations
             builder.Property(x => x.Notes)
                 .HasMaxLength(2000);
 
+            // File-based template properties
+            builder.Property(x => x.TemplateType)
+                .HasMaxLength(50);
+
+            builder.Property(x => x.IsFileBased)
+                .IsRequired()
+                .HasDefaultValue(false);
+
+            builder.Property(x => x.FileName)
+                .HasMaxLength(255);
+
+            builder.Property(x => x.FileUrl)
+                .HasColumnType("text");
+
+            builder.Property(x => x.FileSize);
+
+            builder.Property(x => x.MimeType)
+                .HasMaxLength(100);
+
             // Relationships
             builder.HasOne(x => x.OwnerUser)
                 .WithMany()
@@ -92,8 +111,8 @@ namespace CRM.Infrastructure.EntityConfigurations
             builder.HasIndex(x => x.PreviousVersionId)
                 .HasFilter("[PreviousVersionId] IS NOT NULL");
 
-            // Unique constraint: Name must be unique per owner (excluding deleted)
-            builder.HasIndex(x => new { x.Name, x.OwnerUserId })
+            // Unique constraint: Name must be unique per owner per version (excluding deleted)
+            builder.HasIndex(x => new { x.Name, x.OwnerUserId, x.Version })
                 .IsUnique()
                 .HasFilter("[DeletedAt] IS NULL");
         }

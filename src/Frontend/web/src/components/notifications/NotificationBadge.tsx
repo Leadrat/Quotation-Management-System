@@ -1,29 +1,35 @@
-"use client";
-import Link from "next/link";
-import { Bell } from "lucide-react";
+'use client';
+
+import { useEffect } from 'react';
+import { useNotificationStore } from '../../store/notificationStore';
 
 interface NotificationBadgeProps {
-  count: number;
-  href?: string;
   className?: string;
+  showZero?: boolean;
 }
 
-export function NotificationBadge({ count, href = "/notifications", className = "" }: NotificationBadgeProps) {
-  const content = (
-    <div className={`relative ${className}`}>
-      <Bell size={16} />
-      {count > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
-    </div>
-  );
+export function NotificationBadge({ className = '', showZero = false }: NotificationBadgeProps) {
+  const { unreadCount, refreshUnreadCount } = useNotificationStore();
 
-  if (href) {
-    return <Link href={href}>{content}</Link>;
+  useEffect(() => {
+    // Load initial unread count
+    refreshUnreadCount();
+    
+    // Refresh every 30 seconds
+    const interval = setInterval(refreshUnreadCount, 30000);
+    
+    return () => clearInterval(interval);
+  }, [refreshUnreadCount]);
+
+  if (!showZero && unreadCount === 0) {
+    return null;
   }
 
-  return content;
+  return (
+    <span
+      className={`inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full ${className}`}
+    >
+      {unreadCount > 99 ? '99+' : unreadCount}
+    </span>
+  );
 }
-

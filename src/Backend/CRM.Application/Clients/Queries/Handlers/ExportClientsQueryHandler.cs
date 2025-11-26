@@ -19,11 +19,13 @@ namespace CRM.Application.Clients.Queries.Handlers
         public async Task<List<Client>> Handle(ExportClientsQuery q)
         {
             var isAdmin = string.Equals(q.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
+            var isManager = string.Equals(q.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
             var max = q.MaxRows <= 0 ? 10000 : (q.MaxRows > 10000 ? 10000 : q.MaxRows);
 
             var query = _db.Clients.AsNoTracking().Where(c => c.DeletedAt == null);
 
-            if (!isAdmin)
+            // Admin and Manager see all clients
+            if (!isAdmin && !isManager)
             {
                 query = query.Where(c => c.CreatedByUserId == q.RequestorUserId);
             }

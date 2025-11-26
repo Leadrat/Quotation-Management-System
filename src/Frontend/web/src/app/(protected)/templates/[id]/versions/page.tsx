@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { TemplatesApi } from "@/lib/api";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { VersionHistoryTimeline } from "@/components/templates";
 import type { QuotationTemplateVersion } from "@/types/templates";
 
@@ -16,10 +17,19 @@ export default function TemplateVersionsPage() {
   const [currentTemplate, setCurrentTemplate] = useState<any>(null);
 
   useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    
+    // Redirect managers and sales reps away from templates - only admins can access
+    if (userRole !== "Admin") {
+      router.replace("/dashboard");
+      return;
+    }
+    
     if (templateId) {
       loadData();
     }
-  }, [templateId]);
+  }, [templateId, router]);
 
   const loadData = async () => {
     try {

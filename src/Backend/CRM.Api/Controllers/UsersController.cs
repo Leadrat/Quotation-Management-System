@@ -2,12 +2,16 @@ using System.Threading.Tasks;
 using CRM.Application.Users.Commands;
 using CRM.Application.Users.Commands.Handlers;
 using CRM.Application.Users.Commands.Results;
+using CRM.Application.Users.Queries;
+using CRM.Application.Users.Queries.Handlers;
+using CRM.Application.Common.Interfaces;
 using CRM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using CRM.Api.Filters;
 using CRM.Infrastructure.Logging;
 using Microsoft.AspNetCore.Authorization;
 using System;
+using System.Linq;
 using AutoMapper;
 using CRM.Application.Users.Commands.Requests;
 using CRM.Application.Users.Dtos;
@@ -26,14 +30,47 @@ public class UsersController : ControllerBase
     private readonly IMapper _mapper;
     private readonly IEmailQueue _emails;
     private readonly IResetTokenGenerator _tokenGen;
+    private readonly ITenantContext _tenantContext;
 
-    public UsersController(AppDbContext db, IAuditLogger audit, IMapper mapper, IEmailQueue emails, IResetTokenGenerator tokenGen)
+    public UsersController(AppDbContext db, IAuditLogger audit, IMapper mapper, IEmailQueue emails, IResetTokenGenerator tokenGen, ITenantContext tenantContext)
     {
         _db = db;
         _audit = audit;
         _mapper = mapper;
         _emails = emails;
         _tokenGen = tokenGen;
+        _tenantContext = tenantContext;
+    }
+
+    [HttpGet]
+    [Authorize]
+    public async Task<IActionResult> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? searchTerm = null)
+    {
+        var user = HttpContext.User;
+        var isAdmin = user.IsInRole("Admin");
+        var role = isAdmin ? "Admin" : (user.IsInRole("SalesRep") ? "SalesRep" : string.Empty);
+        Guid.TryParse(user.Claims.FirstOrDefault(c => c.Type == "sub" || c.Type == "userId" || c.Type == ClaimTypes.NameIdentifier)?.Value, out var currentUserId);
+
+        var query = new GetAllUsersQuery
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            SearchTerm = searchTerm,
+            RequestorUserId = currentUserId,
+            RequestorRole = role
+        };
+
+        var handler = new GetAllUsersQueryHandler(_db, _mapper, _tenantContext);
+        var result = await handler.Handle(query);
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data,
+            pageNumber = result.PageNumber,
+            pageSize = result.PageSize,
+            totalCount = result.TotalCount
+        });
     }
 
     [HttpPost]
@@ -41,8 +78,12 @@ public class UsersController : ControllerBase
     [ProducesResponseType(typeof(UserCreatedResult), 201)]
     public async Task<IActionResult> Create([FromBody] CreateUserCommand cmd)
     {
+        var actorIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? string.Empty;
+        Guid.TryParse(actorIdStr, out var actorId);
+        cmd.CreatedByUserId = actorId;
+
         await _audit.LogAsync("admin_create_user_attempt", new { cmd.Email, cmd.RoleId });
-        var handler = new CreateUserCommandHandler(_db);
+        var handler = new CreateUserCommandHandler(_db, _tenantContext);
         var result = await handler.Handle(cmd);
         await _audit.LogAsync("admin_create_user_success", new { result.UserId, result.Email, result.RoleId });
         return Created(string.Empty, result);

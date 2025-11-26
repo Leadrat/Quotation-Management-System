@@ -40,7 +40,7 @@ namespace CRM.Application.Clients.Commands.Handlers
                 var emailLower = cmd.Email.Trim().ToLowerInvariant();
                 if (!string.Equals(emailLower, entity.Email, StringComparison.Ordinal))
                 {
-                    var exists = await _db.Clients.AnyAsync(c => c.DeletedAt == null && c.Email.ToLower() == emailLower && c.ClientId != entity.ClientId);
+                    var exists = await _db.Clients.AnyAsync(c => c.DeletedAt == null && c.Email != null && c.Email.ToLower() == emailLower && c.ClientId != entity.ClientId);
                     if (exists) throw new DuplicateEmailException(cmd.Email);
                     entity.Email = emailLower;
                 }

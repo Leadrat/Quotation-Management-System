@@ -1,0 +1,523 @@
+openapi: 3.0.3
+info:
+  title: Document Template Upload & Conversion API
+  description: |
+    API for uploading PDF or Word documents and converting them to editable Word templates 
+    with placeholders for company details. Supports Quotation and Proforma Invoice templates.
+    
+    Features:
+    - Upload PDF or Word documents
+    - Automatic identification of company details
+    - Conversion to Word templates with placeholders
+    - Manual placeholder editing
+    - Template preview and management
+  version: 1.0.0
+  contact:
+    name: CRM API Support
+
+servers:
+  - url: https://api.crm.example.com/api/v1
+    description: Production server
+  - url: http://localhost:5000/api/v1
+    description: Development server
+
+tags:
+  - name: Document Templates
+    description: Document template upload and conversion operations
+  - name: Template Placeholders
+    description: Template placeholder management operations
+
+paths:
+  /document-templates/upload:
+    post:
+      tags: [Document Templates]
+      summary: Upload document for template conversion
+      description: Upload a PDF or Word document to convert into a template with placeholders
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - templateType
+                - name
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF or Word document file (max 50MB)
+                templateType:
+                  type: string
+                  enum: [Quotation, ProformaInvoice]
+                  description: Type of template
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Template name
+                description:
+                  type: string
+                  maxLength: 255
+                  description: Optional template description
+      responses:
+        '202':
+          description: Document uploaded and processing started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/DocumentTemplateDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large (exceeds 50MB)
+        '415':
+          description: Unsupported file type
+
+  /document-templates/{templateId}/convert:
+    post:
+      tags: [Document Templates]
+      summary: Convert uploaded document to template
+      description: Process uploaded document and convert to Word template with placeholders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                autoIdentify:
+                  type: boolean
+                  default: true
+                  description: Automatically identify company details and create placeholders
+      responses:
+        '200':
+          description: Conversion completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/ConvertDocumentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Conversion failed
+
+  /document-templates/{templateId}/preview:
+    get:
+      tags: [Document Templates]
+      summary: Get template preview
+      description: Get preview of converted template with identified placeholders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/TemplatePreviewDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /document-templates/{templateId}/download:
+    get:
+      tags: [Document Templates]
+      summary: Download converted template
+      description: Download the converted Word template file
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Word template file
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /document-templates/{templateId}/placeholders:
+    get:
+      tags: [Template Placeholders]
+      summary: Get template placeholders
+      description: Get list of all placeholders in a template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: placeholderType
+          in: query
+          schema:
+            type: string
+            enum: [Company, Customer]
+          description: Filter by placeholder type
+      responses:
+        '200':
+          description: List of placeholders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TemplatePlaceholderDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Template Placeholders]
+      summary: Add or update placeholder
+      description: Manually add or update a placeholder in the template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaceholderRequest'
+      responses:
+        '200':
+          description: Placeholder added/updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/TemplatePlaceholderDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Template Placeholders]
+      summary: Remove placeholder
+      description: Remove a placeholder from the template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: placeholderName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Placeholder removed successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /document-templates/{templateId}/save:
+    post:
+      tags: [Document Templates]
+      summary: Save template
+      description: Save the converted template with all placeholders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visibility:
+                  type: string
+                  enum: [Public, Team, Private]
+                  default: Private
+                description:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Template saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/DocumentTemplateDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    DocumentTemplateDto:
+      type: object
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        templateType:
+          type: string
+          enum: [Quotation, ProformaInvoice]
+        isFileBased:
+          type: boolean
+        templateFilePath:
+          type: string
+          nullable: true
+        originalFileName:
+          type: string
+          nullable: true
+        fileSizeBytes:
+          type: integer
+          format: int64
+          nullable: true
+        processingStatus:
+          type: string
+          enum: [Pending, Processing, Completed, Failed]
+          nullable: true
+        processingErrorMessage:
+          type: string
+          nullable: true
+        ownerUserId:
+          type: string
+          format: uuid
+        ownerUserName:
+          type: string
+        visibility:
+          type: string
+          enum: [Public, Team, Private]
+        isApproved:
+          type: boolean
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ConvertDocumentResponse:
+      type: object
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        processingStatus:
+          type: string
+          enum: [Processing, Completed, Failed]
+        placeholdersIdentified:
+          type: integer
+          description: Number of placeholders automatically identified
+        placeholders:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplatePlaceholderDto'
+        templateFilePath:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+
+    TemplatePreviewDto:
+      type: object
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        placeholders:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplatePlaceholderDto'
+        previewText:
+          type: string
+          description: Sample text showing placeholder locations
+        totalPlaceholders:
+          type: integer
+
+    TemplatePlaceholderDto:
+      type: object
+      properties:
+        placeholderId:
+          type: string
+          format: uuid
+        templateId:
+          type: string
+          format: uuid
+        placeholderName:
+          type: string
+          example: CompanyName
+        placeholderType:
+          type: string
+          enum: [Company, Customer]
+        originalText:
+          type: string
+          nullable: true
+        positionInDocument:
+          type: integer
+          nullable: true
+        isManuallyAdded:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePlaceholderRequest:
+      type: object
+      required:
+        - placeholderName
+        - placeholderType
+      properties:
+        placeholderName:
+          type: string
+          pattern: '^[A-Z][a-zA-Z0-9]+$'
+          example: CompanyName
+        placeholderType:
+          type: string
+          enum: [Company, Customer]
+        originalText:
+          type: string
+          nullable: true
+        positionInDocument:
+          type: integer
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+

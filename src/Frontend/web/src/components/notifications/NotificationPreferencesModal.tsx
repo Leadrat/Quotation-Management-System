@@ -149,10 +149,10 @@ export function NotificationPreferencesModal({
           )}
 
           <div className="flex items-center justify-end gap-3">
-            <Button type="button" size="sm" variant="outline" onClick={onClose} disabled={loading}>
+            <Button size="sm" variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={handleSave} disabled={loading}>
+            <Button size="sm" onClick={handleSave} disabled={loading}>
               {loading ? "Saving..." : "Save Preferences"}
             </Button>
           </div>

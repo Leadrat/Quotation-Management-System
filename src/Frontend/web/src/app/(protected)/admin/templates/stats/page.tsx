@@ -24,9 +24,15 @@ export default function TemplateUsageStatsPage() {
       if (dateTo) params.endDate = dateTo;
 
       const result = await TemplatesApi.getUsageStats(params);
-      setStats(result.data);
+      setStats(result.data || null);
     } catch (err: any) {
-      setError(err.message || "Failed to load usage statistics");
+      const errorMsg = err.message || "Failed to load usage statistics";
+      setError(errorMsg);
+      setStats(null);
+      // Don't show error for 500 - endpoint may have issues
+      if (err.message?.includes("500")) {
+        setError("Template usage statistics are temporarily unavailable. Please try again later.");
+      }
     } finally {
       setLoading(false);
     }

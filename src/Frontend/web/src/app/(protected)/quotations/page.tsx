@@ -2,13 +2,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { QuotationsApi, DiscountApprovalsApi } from "@/lib/api";
-import { getAccessToken } from "@/lib/session";
+import { getAccessToken, getRoleFromToken } from "@/lib/session";
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/utils/quotationFormatter";
 import { QuotationListSkeleton } from "@/components/quotations/LoadingSkeleton";
 import { QuotationErrorBoundary } from "@/components/quotations/ErrorBoundary";
 import { useToast, ToastContainer } from "@/components/quotations/Toast";
 import { ApprovalStatusBadge } from "@/components/approvals";
 import { DiscountApproval } from "@/types/discount-approvals";
+import PageBreadcrumb from "@/components/tailadmin/common/PageBreadCrumb";
+import Input from "@/components/tailadmin/form/input/InputField";
+import Label from "@/components/tailadmin/form/Label";
+import Button from "@/components/tailadmin/ui/button/Button";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/tailadmin/ui/table";
+import Pagination from "@/components/tailadmin/tables/Pagination";
+import Alert from "@/components/tailadmin/ui/alert/Alert";
+import Badge from "@/components/tailadmin/ui/badge/Badge";
 
 export default function QuotationsListPage() {
   const [loading, setLoading] = useState(true);
@@ -18,7 +26,14 @@ export default function QuotationsListPage() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [approvalMap, setApprovalMap] = useState<Record<string, DiscountApproval>>({});
+  const [role, setRole] = useState<string | null>(null);
   const toast = useToast();
+
+  useEffect(() => {
+    const token = getAccessToken();
+    const userRole = getRoleFromToken(token);
+    setRole(userRole);
+  }, []);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("");
@@ -47,7 +62,9 @@ export default function QuotationsListPage() {
       if (dateTo) params.dateTo = dateTo;
 
       const result = await QuotationsApi.list(params);
+      console.log("Quotations API response:", result);
       const quotations = result.data || [];
+      console.log("Quotations count:", quotations.length, "Total count:", result.totalCount);
       setItems(quotations);
       setTotal(result.totalCount || 0);
       setError(null);
@@ -108,31 +125,46 @@ export default function QuotationsListPage() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case "ACCEPTED": return "success";
+      case "REJECTED": return "error";
+      case "DRAFT": return "warning";
+      case "SENT": return "primary";
+      case "VIEWED": return "primary";
+      case "EXPIRED": return "error";
+      case "CANCELLED": return "error";
+      default: return "primary";
+    }
+  };
+
   return (
     <QuotationErrorBoundary>
-      <div className="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-        <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
-      <div className="mb-6 flex items-center justify-between">
-        <h4 className="text-title-md2 font-bold text-black dark:text-white">Quotations</h4>
-        <Link
-          href="/quotations/new"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-2.5 text-center font-medium text-white hover:bg-opacity-90"
-        >
-          Create Quotation
-        </Link>
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
+      <PageBreadcrumb pageTitle="Quotations" />
+      
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Quotations</h2>
+        {role === "SalesRep" && (
+          <Link href="/quotations/new">
+            <Button size="sm" variant="outline" className="!text-black dark:!text-white">Create Quotation</Button>
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
-      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Status</label>
+          <Label>Status</Label>
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPageNumber(1);
             }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-5 py-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+            className="h-11 w-full appearance-none rounded-lg border border-gray-300 px-4 py-2.5 pr-11 text-sm shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
           >
             <option value="">All Statuses</option>
             <option value="DRAFT">Draft</option>
@@ -145,32 +177,30 @@ export default function QuotationsListPage() {
           </select>
         </div>
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Date From</label>
-          <input
+          <Label>Date From</Label>
+          <Input
             type="date"
             value={dateFrom}
             onChange={(e) => {
               setDateFrom(e.target.value);
               setPageNumber(1);
             }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-5 py-3 font-medium outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Date To</label>
-          <input
+          <Label>Date To</Label>
+          <Input
             type="date"
             value={dateTo}
             onChange={(e) => {
               setDateTo(e.target.value);
               setPageNumber(1);
             }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-5 py-3 font-medium outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Client ID</label>
-          <input
+          <Label>Client ID</Label>
+          <Input
             type="text"
             value={clientIdFilter}
             onChange={(e) => {
@@ -178,123 +208,108 @@ export default function QuotationsListPage() {
               setPageNumber(1);
             }}
             placeholder="Filter by Client ID"
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent px-5 py-3 font-medium outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white"
           />
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded border-l-4 border-red-500 bg-red-50 p-4 dark:bg-red-900/20">
-          <p className="text-red-700 dark:text-red-400">{error}</p>
-        </div>
-      )}
+      {error && <Alert className="mb-4" variant="error" title="Error" message={error} />}
 
       {loading ? (
-        <div className="py-8 text-center">Loading...</div>
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-8 text-center">
+          <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+        </div>
       ) : items.length === 0 ? (
-        <div className="py-8 text-center text-gray-500">No quotations found</div>
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-8 text-center">
+          <div className="text-gray-500 dark:text-gray-400">No quotations found</div>
+        </div>
       ) : (
         <>
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto">
-              <thead>
-                <tr className="bg-gray-2 text-left dark:bg-meta-4">
-                  <th className="min-w-[120px] px-4 py-4 font-medium text-black dark:text-white">Quotation #</th>
-                  <th className="min-w-[150px] px-4 py-4 font-medium text-black dark:text-white">Client</th>
-                  <th className="min-w-[100px] px-4 py-4 font-medium text-black dark:text-white">Status</th>
-                  <th className="min-w-[120px] px-4 py-4 font-medium text-black dark:text-white">Approval</th>
-                  <th className="min-w-[120px] px-4 py-4 font-medium text-black dark:text-white">Date</th>
-                  <th className="min-w-[120px] px-4 py-4 font-medium text-black dark:text-white">Total Amount</th>
-                  <th className="min-w-[150px] px-4 py-4 font-medium text-black dark:text-white">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.quotationId} className="border-b border-[#eee] dark:border-strokedark">
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      <Link href={`/quotations/${item.quotationId}`} className="text-primary hover:underline">
-                        {item.quotationNumber}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      <p className="text-black dark:text-white">{item.clientName}</p>
-                      <p className="text-sm text-gray-500">{item.clientEmail}</p>
-                    </td>
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(item.status)}`}>
-                        {getStatusLabel(item.status)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      {approvalMap[item.quotationId] ? (
-                        <ApprovalStatusBadge status={approvalMap[item.quotationId].status} />
-                      ) : (
-                        <span className="text-xs text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      <p className="text-black dark:text-white">{formatDate(item.quotationDate)}</p>
-                    </td>
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      <p className="font-medium text-black dark:text-white">{formatCurrency(item.totalAmount)}</p>
-                    </td>
-                    <td className="px-4 py-5 dark:border-strokedark">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/quotations/${item.quotationId}`}
-                          className="rounded bg-primary px-3 py-1 text-xs text-white hover:bg-opacity-90"
-                        >
-                          View
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+            <div className="max-w-full overflow-x-auto">
+              <Table>
+                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                  <TableRow>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Quotation #</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Client</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Status</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Approval</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Date</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Total Amount</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Actions</TableCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                  {items.map((item) => (
+                    <TableRow key={item.quotationId}>
+                      <TableCell className="px-5 py-4">
+                        <Link href={`/quotations/${item.quotationId}`} className="text-brand-500 hover:text-brand-600 text-theme-sm">
+                          {item.quotationNumber}
                         </Link>
-                        {item.status === "DRAFT" && (
-                          <>
-                            <Link
-                              href={`/quotations/${item.quotationId}/edit`}
-                              className="rounded bg-yellow-500 px-3 py-1 text-xs text-white hover:bg-opacity-90"
-                            >
-                              Edit
-                            </Link>
-                            <button
-                              onClick={() => handleDelete(item.quotationId)}
-                              className="rounded bg-red-500 px-3 py-1 text-xs text-white hover:bg-opacity-90"
-                            >
-                              Delete
-                            </button>
-                          </>
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <p className="text-gray-800 text-theme-sm dark:text-white/90">{item.clientName}</p>
+                        <p className="text-gray-500 text-theme-xs dark:text-gray-400">{item.clientEmail}</p>
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <Badge size="sm" color={getStatusBadgeColor(item.status)}>
+                          {getStatusLabel(item.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        {approvalMap[item.quotationId] ? (
+                          <ApprovalStatusBadge status={approvalMap[item.quotationId].status} />
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
+                        {formatDate(item.quotationDate)}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-gray-800 text-theme-sm dark:text-white/90 font-medium">
+                        {formatCurrency(item.totalAmount)}
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <Link href={`/quotations/${item.quotationId}`}>
+                            <Button size="sm" variant="outline" className="text-xs px-2 py-1">View</Button>
+                          </Link>
+                          {item.status === "DRAFT" && role === "SalesRep" && (
+                            <>
+                              <Link href={`/quotations/${item.quotationId}/edit`}>
+                                <Button size="sm" variant="outline" className="text-xs px-2 py-1">Edit</Button>
+                              </Link>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="text-xs px-2 py-1 text-error-500 hover:text-error-600"
+                                onClick={() => handleDelete(item.quotationId)}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
 
           {/* Pagination */}
           <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
               Showing {(pageNumber - 1) * pageSize + 1} to {Math.min(pageNumber * pageSize, total)} of {total} quotations
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-                disabled={pageNumber === 1}
-                className="rounded border border-stroke px-4 py-2 text-sm disabled:opacity-50 dark:border-strokedark"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPageNumber((p) => p + 1)}
-                disabled={pageNumber * pageSize >= total}
-                className="rounded border border-stroke px-4 py-2 text-sm disabled:opacity-50 dark:border-strokedark"
-              >
-                Next
-              </button>
-            </div>
+            <Pagination 
+              currentPage={pageNumber} 
+              totalPages={totalPages} 
+              onPageChange={(p) => setPageNumber(p)} 
+            />
           </div>
         </>
       )}
-      </div>
     </QuotationErrorBoundary>
   );
 }

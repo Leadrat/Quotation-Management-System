@@ -1,3 +1,4 @@
+using CRM.Domain.Entities;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,7 +25,7 @@ namespace CRM.Application.Notifications.Commands.Handlers
 
         public async Task<int> Handle(ArchiveNotificationsCommand command)
         {
-            IQueryable<Domain.Entities.Notification> query = _db.Notifications
+            IQueryable<UserNotification> query = _db.Notifications
                 .Where(n => n.RecipientUserId == command.RequestedByUserId && !n.IsArchived);
 
             // If specific IDs provided, filter by them; otherwise archive all
@@ -38,7 +39,9 @@ namespace CRM.Application.Notifications.Commands.Handlers
 
             foreach (var notification in notifications)
             {
-                notification.Archive();
+                notification.IsArchived = true;
+                notification.ArchivedAt = DateTimeOffset.UtcNow;
+                notification.UpdatedAt = DateTimeOffset.UtcNow;
                 count++;
 
                 // Publish domain event

@@ -1,0 +1,55 @@
+using System;
+using CRM.Application.Common.Interfaces;
+using Finbuckle.MultiTenant;
+
+namespace CRM.Infrastructure.Services
+{
+    /// <summary>
+    /// Implementation of ITenantContext that retrieves current tenant from Finbuckle.
+    /// </summary>
+    public class TenantContext : ITenantContext
+    {
+        private readonly IMultiTenantContextAccessor<CRM.Infrastructure.Persistence.FinbuckleTenantInfo> _tenantAccessor;
+
+        public TenantContext(IMultiTenantContextAccessor<CRM.Infrastructure.Persistence.FinbuckleTenantInfo> tenantAccessor)
+        {
+            _tenantAccessor = tenantAccessor;
+        }
+
+        public Guid CurrentTenantId
+        {
+            get
+            {
+                var tenantInfo = _tenantAccessor?.MultiTenantContext?.TenantInfo;
+                if (tenantInfo?.Id == null)
+                    throw new InvalidOperationException("No tenant context available. Ensure X-Tenant-Id header is set.");
+
+                if (!Guid.TryParse(tenantInfo.Id, out var tenantId))
+                    throw new InvalidOperationException($"Invalid tenant ID format: {tenantInfo.Id}");
+
+                return tenantId;
+            }
+        }
+
+        public string CurrentTenantIdentifier
+        {
+            get
+            {
+                var tenantInfo = _tenantAccessor?.MultiTenantContext?.TenantInfo;
+                if (string.IsNullOrWhiteSpace(tenantInfo?.Identifier))
+                    throw new InvalidOperationException("No tenant context available. Ensure X-Tenant-Id header is set.");
+
+                return tenantInfo.Identifier;
+            }
+        }
+
+        public bool HasTenantContext
+        {
+            get
+            {
+                var tenantInfo = _tenantAccessor?.MultiTenantContext?.TenantInfo;
+                return tenantInfo != null && !string.IsNullOrWhiteSpace(tenantInfo.Id);
+            }
+        }
+    }
+}

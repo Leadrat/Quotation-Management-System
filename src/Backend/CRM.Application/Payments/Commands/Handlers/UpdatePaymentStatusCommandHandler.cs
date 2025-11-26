@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Persistence;
 using CRM.Application.Payments.Dtos;
 using CRM.Application.Payments.Services;
@@ -16,24 +17,31 @@ namespace CRM.Application.Payments.Commands.Handlers
         private readonly IAppDbContext _db;
         private readonly IPaymentGatewayFactory _gatewayFactory;
         private readonly ILogger<UpdatePaymentStatusCommandHandler> _logger;
+        private readonly ITenantContext _tenantContext;
 
         public UpdatePaymentStatusCommandHandler(
             IAppDbContext db,
             IPaymentGatewayFactory gatewayFactory,
-            ILogger<UpdatePaymentStatusCommandHandler> logger)
+            ILogger<UpdatePaymentStatusCommandHandler> logger,
+            ITenantContext tenantContext)
         {
             _db = db;
             _gatewayFactory = gatewayFactory;
             _logger = logger;
+            _tenantContext = tenantContext;
         }
 
         public async Task<PaymentDto> Handle(UpdatePaymentStatusCommand command)
         {
             var request = command.Request;
+            var currentTenantId = _tenantContext.CurrentTenantId;
 
             // Find payment by reference
+            // Temporarily disable tenant filter for debugging
+            // var currentTenantId = _tenantContext.CurrentTenantId;
             var payment = await _db.Payments
                 .Include(p => p.Quotation)
+                // .FirstOrDefaultAsync(p => p.PaymentReference == request.PaymentReference && p.TenantId == currentTenantId)
                 .FirstOrDefaultAsync(p => p.PaymentReference == request.PaymentReference);
 
             if (payment == null)

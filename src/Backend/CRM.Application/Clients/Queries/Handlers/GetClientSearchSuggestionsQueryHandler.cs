@@ -19,11 +19,13 @@ namespace CRM.Application.Clients.Queries.Handlers
         public async Task<List<string>> Handle(GetClientSearchSuggestionsQuery q)
         {
             var isAdmin = string.Equals(q.RequestorRole, "Admin", StringComparison.OrdinalIgnoreCase);
+            var isManager = string.Equals(q.RequestorRole, "Manager", StringComparison.OrdinalIgnoreCase);
             var term = q.SearchTerm.Trim();
             var lower = term.ToLower();
 
             var clients = _db.Clients.AsNoTracking();
-            if (!isAdmin)
+            // Admin and Manager see all clients
+            if (!isAdmin && !isManager)
             {
                 clients = clients.Where(c => c.CreatedByUserId == q.RequestorUserId);
             }
